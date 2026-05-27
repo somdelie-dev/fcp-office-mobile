@@ -95,4 +95,13 @@ tsc_*.txt
 # Google Play service account key
 play-store-key.json
 
+# EAS on Windows also needs the generated directory entries excluded.
+node_modules
+dist
+web-build
+.kotlin
+app-example
+/ios
+/android
+
 # @end expo-cli
