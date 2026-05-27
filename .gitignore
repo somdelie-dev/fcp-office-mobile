@@ -82,6 +82,14 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# local repository backup and generated build output
+.git_disabled/
+build-output.aab
+build_output.log
+preview-dev-server*.log
+tsc_*.log
+tsc_*.txt
+
 # Google Play service account key
 play-store-key.json
 
