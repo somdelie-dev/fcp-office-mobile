@@ -5,6 +5,7 @@ node_modules/
 
 # Expo
 .expo/
+.expo
 dist/
 web-build/
 expo-env.d.ts
@@ -84,6 +85,7 @@ yarn-error.*
 
 # local repository backup and generated build output
 .git_disabled/
+.git_disabled
 build-output.aab
 build_output.log
 preview-dev-server*.log
