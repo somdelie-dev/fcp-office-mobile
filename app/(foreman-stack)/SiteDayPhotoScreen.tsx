@@ -464,10 +464,10 @@ export default function SiteDayPhotoScreen() {
   }, [ensureCameraPermissions]);
 
   const doUpload = useCallback(
-    async (file: { uri: string; name: string; type: string }) => {
+    async (file: { uri: string; name: string; type: string }): Promise<boolean> => {
       if (!siteId) {
         Alert.alert("No site selected", "Please select a site first.");
-        return;
+        return false;
       }
 
       setUploading(true);
@@ -486,7 +486,7 @@ export default function SiteDayPhotoScreen() {
               e?.message ?? "Please try again.",
             );
             setUploading(false);
-            return;
+            return false;
           }
         }
 
@@ -498,7 +498,7 @@ export default function SiteDayPhotoScreen() {
             "Please enable location services to upload photos.",
           );
           setUploading(false);
-          return;
+          return false;
         }
 
         // Compress image before upload (max 1600px, 70% quality)
@@ -585,8 +585,11 @@ export default function SiteDayPhotoScreen() {
         } catch {
           // Ignore errors loading recent photos
         }
+
+        return true;
       } catch (e: any) {
         Alert.alert("Upload failed", e?.message ?? "Please try again.");
+        return false;
       } finally {
         setUploading(false);
       }
@@ -624,8 +627,10 @@ export default function SiteDayPhotoScreen() {
       Alert.alert("No photo", "Take a photo first before submitting.");
       return;
     }
-    await doUpload(pendingPhoto);
-    setPendingPhoto(null);
+    const succeeded = await doUpload(pendingPhoto);
+    // Only clear the captured photo once it's actually made it to the server -
+    // otherwise the foreman would have to retake/recompress it to retry.
+    if (succeeded) setPendingPhoto(null);
   }, [pendingPhoto, doUpload]);
 
   const requestLabel = (r: SiteDayPhotoRequestDto) => {

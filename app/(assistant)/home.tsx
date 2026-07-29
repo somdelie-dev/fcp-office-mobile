@@ -426,7 +426,7 @@ export default function AssistantScan() {
             </Text>
             <Text style={[styles.sub, { color: isDark ? "#94a3b8" : "#666" }]}>
               Choose which foreman you are acting for to see their sites and
-              scan workers.
+              scan your team.
             </Text>
 
             <FlatList

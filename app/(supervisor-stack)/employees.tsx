@@ -270,7 +270,7 @@ export default function SupervisorEmployeesScreen() {
       const res = await apiEmployeesCached(forceRefresh);
       setRows(res.employees ?? []);
     } catch (e: any) {
-      setError(e?.message ?? "Failed to load employees.");
+      setError(e?.message ?? "Failed to load team.");
       setRows([]);
     } finally {
       setLoading(false);
@@ -372,7 +372,7 @@ export default function SupervisorEmployeesScreen() {
       setCreateVisible(false);
       await load(true);
     } catch (e: any) {
-      setCreateError(e?.message ?? "Failed to create employee.");
+      setCreateError(e?.message ?? "Failed to create guy.");
     } finally {
       setCreating(false);
     }
@@ -401,7 +401,7 @@ export default function SupervisorEmployeesScreen() {
     const action = newActive ? "activate" : "deactivate";
 
     Alert.alert(
-      `${newActive ? "Activate" : "Deactivate"} Employee`,
+      `${newActive ? "Activate" : "Deactivate"} Guy`,
       `Are you sure you want to ${action} ${employee.fullName}?`,
       [
         { text: "Cancel", style: "cancel" },
@@ -420,7 +420,7 @@ export default function SupervisorEmployeesScreen() {
             } catch (e: any) {
               Alert.alert(
                 "Error",
-                e?.message ?? `Failed to ${action} employee`,
+                e?.message ?? `Failed to ${action} guy`,
               );
             } finally {
               setActionBusy(false);
@@ -606,14 +606,14 @@ export default function SupervisorEmployeesScreen() {
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>👷</Text>
               <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-                {q.trim() ? "No matching employees" : "No employees yet"}
+                {q.trim() ? "No matching team members" : "No team members yet"}
               </Text>
               <Text
                 style={[styles.emptyMessage, { color: colors.textSecondary }]}
               >
                 {q.trim()
                   ? "Try a different search term"
-                  : "Employees will appear here once added"}
+                  : "Team will appear here once added"}
               </Text>
             </View>
           }
@@ -672,7 +672,7 @@ export default function SupervisorEmployeesScreen() {
                   <Text
                     style={[styles.createTitle, { color: colors.textPrimary }]}
                   >
-                    Add Employee
+                    Add Guy
                   </Text>
                   <Pressable
                     onPress={() => setCreateVisible(false)}

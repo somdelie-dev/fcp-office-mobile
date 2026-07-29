@@ -390,7 +390,7 @@ export default function SupervisorSiteDetailScreen() {
               })
             }
           >
-            <Text style={styles.actionTxt}>↔ Transfer Employee</Text>
+            <Text style={styles.actionTxt}>↔ Transfer Guy</Text>
           </Pressable>
         </GlassCard>
 
@@ -422,7 +422,7 @@ export default function SupervisorSiteDetailScreen() {
 
             <View style={styles.totalTile}>
               <Text style={[styles.totalLabel, { color: colors.totalLabel }]}>
-                Worker Days
+                Team Days
               </Text>
               <Text style={[styles.totalValue, { color: colors.totalValue }]}>
                 {Number(t?.totalDays ?? 0)}

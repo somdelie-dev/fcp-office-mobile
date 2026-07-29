@@ -411,7 +411,7 @@ function SiteDetailSheet({
                 ) : data.totals ? (
                   <View style={{ gap: 6 }}>
                     <Text style={{ color: colors.textTertiary }}>
-                      Worker days:{" "}
+                      Team days:{" "}
                       <Text
                         style={{ color: colors.textPrimary, fontWeight: "900" }}
                       >
@@ -876,6 +876,7 @@ export default function ReportsScreen() {
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
           paddingHorizontal: 16,
           paddingTop: 16,

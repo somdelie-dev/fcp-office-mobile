@@ -1,15 +1,15 @@
-import { Platform } from "react-native";
-
 export type UploadProgressHandler = (percent: number) => void;
 
-export async function uploadWithProgress(
+const UPLOAD_TIMEOUT_MS = 60000;
+const MAX_ATTEMPTS = 3;
+
+function singleAttemptUpload(
   url: string,
   file: { uri: string; name: string; type: string },
-  formFields: Record<string, string | undefined> = {},
-  headers: Record<string, string> = {},
+  formFields: Record<string, string | undefined>,
+  headers: Record<string, string>,
   onProgress?: UploadProgressHandler,
 ): Promise<any> {
-  // Use XMLHttpRequest for progress on mobile
   return new Promise((resolve, reject) => {
     try {
       const xhr = new XMLHttpRequest();
@@ -26,6 +26,7 @@ export async function uploadWithProgress(
       }
 
       xhr.open("POST", url);
+      xhr.timeout = UPLOAD_TIMEOUT_MS;
 
       for (const k of Object.keys(headers)) {
         xhr.setRequestHeader(k, headers[k]);
@@ -56,8 +57,12 @@ export async function uploadWithProgress(
         }
       };
 
-      xhr.onerror = (ev) => {
+      xhr.onerror = () => {
         reject(new Error("Network request failed"));
+      };
+
+      xhr.ontimeout = () => {
+        reject(new Error("Request timed out."));
       };
 
       // Send
@@ -66,4 +71,55 @@ export async function uploadWithProgress(
       reject(e);
     }
   });
+}
+
+/**
+ * Returns true if this error is a transient network failure worth retrying
+ * (timeout or connectivity drop), as opposed to a completed HTTP error response.
+ */
+function isRetryableUploadError(e: any): boolean {
+  const msg = String(e?.message ?? "");
+  return (
+    msg.includes("timed out") ||
+    msg === "Network request failed" ||
+    msg === "Failed to fetch" ||
+    e instanceof TypeError
+  );
+}
+
+export async function uploadWithProgress(
+  url: string,
+  file: { uri: string; name: string; type: string },
+  formFields: Record<string, string | undefined> = {},
+  headers: Record<string, string> = {},
+  onProgress?: UploadProgressHandler,
+): Promise<any> {
+  let attempt = 0;
+  let lastError: any = null;
+
+  while (++attempt <= MAX_ATTEMPTS) {
+    try {
+      if (onProgress) onProgress(0);
+      return await singleAttemptUpload(
+        url,
+        file,
+        formFields,
+        headers,
+        onProgress,
+      );
+    } catch (e: any) {
+      lastError = e;
+
+      if (attempt < MAX_ATTEMPTS && isRetryableUploadError(e)) {
+        // Exponential backoff: 500ms, 1000ms, 2000ms
+        const backoff = 500 * Math.pow(2, attempt - 1);
+        await new Promise((r) => setTimeout(r, backoff));
+        continue;
+      }
+
+      throw e;
+    }
+  }
+
+  throw lastError ?? new Error("Upload failed");
 }

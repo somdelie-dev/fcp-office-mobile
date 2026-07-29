@@ -172,7 +172,25 @@ export default function SupervisorScanScreen() {
     }
     return result.reverse();
   }, [currentFortnight.startISO, todayISO]);
-  const [dateISO, setDateISO] = useState(todayISO);
+  const [selectedDates, setSelectedDates] = useState<string[]>([todayISO]);
+  const selectedDatesKey = useMemo(
+    () => [...selectedDates].sort().join(","),
+    [selectedDates],
+  );
+  const focusDate = useMemo(() => {
+    if (!selectedDates.length) return todayISO;
+    return [...selectedDates].sort().at(-1)!;
+  }, [selectedDates, todayISO]);
+
+  const toggleDate = useCallback((workDate: string) => {
+    setSelectedDates((prev) => {
+      if (prev.includes(workDate)) {
+        if (prev.length === 1) return prev;
+        return prev.filter((d) => d !== workDate);
+      }
+      return [...prev, workDate];
+    });
+  }, []);
 
   const [batch, setBatch] = useState<string[]>([]);
   const batchSet = useMemo(
@@ -180,8 +198,13 @@ export default function SupervisorScanScreen() {
     [batch],
   );
 
-  const [serverScans, setServerScans] = useState<any[]>([]);
-  const [serverIsLocked, setServerIsLocked] = useState(false);
+  const [dayInfoByDate, setDayInfoByDate] = useState<
+    Record<string, { isLocked: boolean; scans: any[] }>
+  >({});
+  const serverScans = dayInfoByDate[focusDate]?.scans ?? [];
+  const allSelectedDatesLocked =
+    selectedDates.length > 0 &&
+    selectedDates.every((d) => dayInfoByDate[d]?.isLocked);
   const [siteDayLoading, setSiteDayLoading] = useState(false);
 
   const [manualInput, setManualInput] = useState("");
@@ -240,33 +263,44 @@ export default function SupervisorScanScreen() {
     }
   }, []);
 
-  const loadSiteDay = useCallback(async (siteId: string, workDateISO: string) => {
-    const requestId = siteDayRequestRef.current + 1;
-    siteDayRequestRef.current = requestId;
-    setSiteDayLoading(true);
-    setError(null);
-    setServerScans([]);
-    setServerIsLocked(false);
-    try {
-      const [todayRes, scansRes] = await Promise.all([
-        apiSupervisorSiteToday(siteId, workDateISO),
-        apiSupervisorSiteScansToday(siteId, workDateISO),
-      ]);
+  const loadSiteDay = useCallback(
+    async (siteId: string, workDates: string[]) => {
+      const requestId = siteDayRequestRef.current + 1;
+      siteDayRequestRef.current = requestId;
+      setSiteDayLoading(true);
+      setError(null);
+      setDayInfoByDate({});
+      try {
+        const entries = await Promise.all(
+          workDates.map(async (workDateISO) => {
+            const [todayRes, scansRes] = await Promise.all([
+              apiSupervisorSiteToday(siteId, workDateISO),
+              apiSupervisorSiteScansToday(siteId, workDateISO),
+            ]);
+            return [
+              workDateISO,
+              {
+                isLocked: !!todayRes.data?.isLocked,
+                scans: scansRes?.scans ?? [],
+              },
+            ] as const;
+          }),
+        );
 
-      if (siteDayRequestRef.current !== requestId) return;
-      setServerScans(scansRes?.scans ?? []);
-      setServerIsLocked(!!todayRes.data?.isLocked);
-    } catch (e: any) {
-      if (siteDayRequestRef.current !== requestId) return;
-      setError(e?.message ?? "Failed to load scans for the selected day.");
-      setServerScans([]);
-      setServerIsLocked(false);
-    } finally {
-      if (siteDayRequestRef.current === requestId) {
-        setSiteDayLoading(false);
+        if (siteDayRequestRef.current !== requestId) return;
+        setDayInfoByDate(Object.fromEntries(entries));
+      } catch (e: any) {
+        if (siteDayRequestRef.current !== requestId) return;
+        setError(e?.message ?? "Failed to load scans for the selected day(s).");
+        setDayInfoByDate({});
+      } finally {
+        if (siteDayRequestRef.current === requestId) {
+          setSiteDayLoading(false);
+        }
       }
-    }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -293,13 +327,14 @@ export default function SupervisorScanScreen() {
   );
 
   useEffect(() => {
-    if (!selectedSite?.id) return;
-    loadSiteDay(selectedSite.id, dateISO);
-  }, [selectedSite?.id, dateISO, loadSiteDay]);
+    if (!selectedSite?.id || !selectedDates.length) return;
+    loadSiteDay(selectedSite.id, selectedDates);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSite?.id, selectedDatesKey, loadSiteDay]);
 
   useEffect(() => {
     setBatch([]);
-  }, [selectedForemanId, dateISO]);
+  }, [selectedForemanId, selectedDatesKey]);
 
   const parseJobNumberFromCode = useCallback((raw?: string) => {
     const s = String(raw ?? "").trim();
@@ -376,7 +411,7 @@ export default function SupervisorScanScreen() {
       );
       if (alreadyOnServer) {
         playErr();
-        setError(`Already scanned on ${prettyWorkDate(dateISO)}: ${key}`);
+        setError(`Already scanned on ${prettyWorkDate(focusDate)}: ${key}`);
         return;
       }
 
@@ -391,7 +426,7 @@ export default function SupervisorScanScreen() {
       selectedForemanId,
       selectedSite?.id,
       serverScans,
-      dateISO,
+      focusDate,
     ],
   );
 
@@ -416,11 +451,20 @@ export default function SupervisorScanScreen() {
       return;
     }
     if (!batch.length) return;
+    if (!selectedDates.length) {
+      setError("Select at least one work date.");
+      return;
+    }
 
-    if (serverIsLocked) {
+    const datesToSubmit = selectedDates.filter(
+      (d) => !dayInfoByDate[d]?.isLocked,
+    );
+    const lockedDates = selectedDates.filter((d) => dayInfoByDate[d]?.isLocked);
+
+    if (!datesToSubmit.length) {
       Alert.alert(
         "Scanning locked",
-        "This site day is locked. You cannot add more scans.",
+        "All selected days are locked. You cannot add more scans.",
       );
       return;
     }
@@ -429,39 +473,41 @@ export default function SupervisorScanScreen() {
     setError(null);
     try {
       const location = await getLocationWithAddress();
-      if (!location) {
-        Alert.alert(
-          "Location Required",
-          "Enable location services to submit scans.",
-        );
-        return;
+
+      let created = 0;
+      let dupes = 0;
+      let unknown = 0;
+      let inactive = 0;
+
+      for (const workDateISO of datesToSubmit) {
+        const res = await apiSupervisorScanBulk({
+          siteId: selectedSite.id,
+          foremanId: selectedForemanId,
+          workDateISO,
+          employeeCodes: batch,
+          location,
+        });
+
+        const results = res?.results ?? [];
+        created += results.filter((r: any) => r.status === "CREATED").length;
+        dupes += results.filter(
+          (r: any) => r.status === "ALREADY_SCANNED",
+        ).length;
+        unknown += results.filter((r: any) => r.status === "UNKNOWN").length;
+        inactive += results.filter((r: any) => r.status === "INACTIVE").length;
       }
 
-      const res = await apiSupervisorScanBulk({
-        siteId: selectedSite.id,
-        foremanId: selectedForemanId,
-        workDateISO: dateISO,
-        employeeCodes: batch,
-        location,
-      });
-
-      await loadSiteDay(selectedSite.id, dateISO);
+      await loadSiteDay(selectedSite.id, selectedDates);
 
       setBatch([]);
 
-      const results = res?.results ?? [];
-      const created = results.filter((r: any) => r.status === "CREATED").length;
-      const dupes = results.filter(
-        (r: any) => r.status === "ALREADY_SCANNED",
-      ).length;
-      const unknown = results.filter((r: any) => r.status === "UNKNOWN").length;
-      const inactive = results.filter(
-        (r: any) => r.status === "INACTIVE",
-      ).length;
+      const lockedNote = lockedDates.length
+        ? `\n\nSkipped (locked): ${lockedDates.map(prettyWorkDate).join(", ")}`
+        : "";
 
       Alert.alert(
         "Batch submitted",
-        `Saved: ${created}\nAlready scanned: ${dupes}\nUnknown: ${unknown}\nInactive: ${inactive}`,
+        `Days: ${datesToSubmit.map(prettyWorkDate).join(", ")}\nSaved: ${created}\nAlready scanned: ${dupes}\nUnknown: ${unknown}\nInactive: ${inactive}${lockedNote}`,
       );
       setError(null);
     } catch (e: any) {
@@ -472,18 +518,18 @@ export default function SupervisorScanScreen() {
     }
   }, [
     batch,
-    dateISO,
+    selectedDates,
+    dayInfoByDate,
     getLocationWithAddress,
     loadSiteDay,
     selectedForemanId,
     selectedSite?.id,
-    serverIsLocked,
   ]);
 
   const canScan =
     !!selectedSite?.id &&
     !!selectedForemanId &&
-    !serverIsLocked &&
+    !allSelectedDatesLocked &&
     !siteDayLoading &&
     !busySubmit;
 
@@ -535,10 +581,12 @@ export default function SupervisorScanScreen() {
 
           <View style={styles.dateHeader}>
             <Text style={[styles.selectorLabel, { color: colors.textSecondary }]}>
-              Work date
+              Work date{selectedDates.length > 1 ? "s" : ""}
             </Text>
             <Text style={[styles.selectedDateText, { color: colors.textPrimary }]}>
-              {prettyWorkDate(dateISO)}
+              {selectedDates.length > 1
+                ? `${selectedDates.length} days selected`
+                : prettyWorkDate(focusDate)}
             </Text>
           </View>
 
@@ -548,12 +596,12 @@ export default function SupervisorScanScreen() {
             contentContainerStyle={styles.dateOptions}
           >
             {workDateOptions.map((workDate) => {
-              const selected = workDate === dateISO;
+              const selected = selectedDates.includes(workDate);
               return (
                 <Pressable
                   key={workDate}
                   disabled={busySubmit}
-                  onPress={() => setDateISO(workDate)}
+                  onPress={() => toggleDate(workDate)}
                   style={[
                     styles.dateOption,
                     {
@@ -564,9 +612,19 @@ export default function SupervisorScanScreen() {
                           ? "rgba(255,255,255,0.04)"
                           : "rgba(0,0,0,0.03)",
                       opacity: busySubmit ? 0.6 : 1,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
                     },
                   ]}
                 >
+                  {selected ? (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={14}
+                      color={colors.accent}
+                    />
+                  ) : null}
                   <Text
                     style={[
                       styles.dateOptionText,
@@ -698,7 +756,7 @@ export default function SupervisorScanScreen() {
                 >
                   {busySubmit
                     ? "Submitting scans..."
-                    : serverIsLocked
+                    : allSelectedDatesLocked
                       ? "Scanning locked"
                       : "Select site + foreman"}
                 </Text>
@@ -710,8 +768,10 @@ export default function SupervisorScanScreen() {
                 >
                   {busySubmit
                     ? "Please wait while the selected scans are saved."
-                    : serverIsLocked
-                    ? "This site day is locked. You cannot add more scans."
+                    : allSelectedDatesLocked
+                    ? selectedDates.length > 1
+                      ? "All selected days are locked. You cannot add more scans."
+                      : "This site day is locked. You cannot add more scans."
                     : "Tap Site to choose, then choose the foreman for that site."}
                 </Text>
               </View>
@@ -725,7 +785,9 @@ export default function SupervisorScanScreen() {
           <View style={styles.bottomRow}>
             <View style={{ flex: 1 }}>
               <Text style={{ color: colors.textSecondary, fontWeight: "800" }}>
-                Saved for selected day
+                {selectedDates.length > 1
+                  ? `Submits to ${selectedDates.length} selected days`
+                  : "Saved for selected day"}
               </Text>
             </View>
             <Pressable
@@ -825,7 +887,7 @@ export default function SupervisorScanScreen() {
             <Text
               style={[styles.listHeaderTitle, { color: colors.textPrimary }]}
             >
-              Saved for {prettyWorkDate(dateISO)}
+              Saved for {prettyWorkDate(focusDate)}
             </Text>
             <Text
               style={[styles.listHeaderHint, { color: colors.textSecondary }]}
@@ -849,7 +911,7 @@ export default function SupervisorScanScreen() {
                       style={[styles.serverName, { color: colors.textPrimary }]}
                       numberOfLines={1}
                     >
-                      {item.employeeName ?? "Employee"}
+                      {item.employeeName ?? "Guy"}
                     </Text>
                     <Text
                       style={[

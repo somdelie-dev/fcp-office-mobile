@@ -381,7 +381,7 @@ export default function AdminForemenScreen() {
   const handleCreateAssistant = async () => {
     if (!assistantForeman) return;
     if (!selectedEmployee) {
-      Alert.alert("Error", "Please select an employee");
+      Alert.alert("Error", "Please select a guy");
       return;
     }
     if (!assistantName.trim()) {
@@ -717,7 +717,7 @@ export default function AdminForemenScreen() {
               >
                 {/* Employee picker */}
                 <Text style={[styles.fieldLabel, { color: colors.label }]}>
-                  Select Employee
+                  Select Guy
                 </Text>
                 {!empLoading && employees.length > 0 && (
                   <View
@@ -735,7 +735,7 @@ export default function AdminForemenScreen() {
                         styles.empSearchInput,
                         { color: colors.inputText },
                       ]}
-                      placeholder="Search employees…"
+                      placeholder="Search team…"
                       placeholderTextColor={colors.placeholder}
                       value={empSearch}
                       onChangeText={setEmpSearch}
@@ -766,7 +766,7 @@ export default function AdminForemenScreen() {
                       { color: colors.textMuted, marginBottom: 12 },
                     ]}
                   >
-                    No employees available
+                    No team members available
                   </Text>
                 ) : filteredEmployees.length === 0 ? (
                   <Text
@@ -775,7 +775,7 @@ export default function AdminForemenScreen() {
                       { color: colors.textMuted, marginVertical: 12 },
                     ]}
                   >
-                    No employees match "{empSearch}"
+                    No team members match "{empSearch}"
                   </Text>
                 ) : (
                   <View style={styles.empPickerList}>
@@ -804,7 +804,7 @@ export default function AdminForemenScreen() {
                     <Text
                       style={[styles.infoBoxText, { color: colors.infoText }]}
                     >
-                      ℹ️ Creating new user account for this employee
+                      ℹ️ Creating new user account for this guy
                     </Text>
                   </View>
                 )}

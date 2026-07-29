@@ -30,19 +30,19 @@ const STEPS: Step[] = [
   {
     icon: "home",
     title: "Welcome to Your Dashboard",
-    body: "This is your Home screen. You'll see today's date, your assigned sites, how many workers have been scanned, and the current day status at a glance.",
+    body: "This is your Home screen. You'll see today's date, your assigned sites, how many team members have been scanned, and the current day status at a glance.",
     accent: "#38bdf8",
   },
   {
     icon: "qr-code",
-    title: "Scan Worker Attendance",
-    body: "Tap the Scan tab to open the camera. Point it at a worker's QR badge — you'll hear a beep on success. Scans are saved locally and sync automatically when you're online.",
+    title: "Scan Guy Attendance",
+    body: "Tap the Scan tab to open the camera. Point it at a guy's QR badge — you'll hear a beep on success. Scans are saved locally and sync automatically when you're online.",
     accent: "#22c55e",
   },
   {
     icon: "people",
-    title: "Manage Your Workers",
-    body: "The Workers tab shows everyone assigned to your site. You can search by name or code, view details, and add new workers with the + button.",
+    title: "Manage Your Team",
+    body: "The Team tab shows everyone assigned to your site. You can search by name or code, view details, and add new guys with the + button.",
     accent: "#a78bfa",
   },
   {

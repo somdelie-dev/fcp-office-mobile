@@ -241,7 +241,7 @@ export default function AdminHomeScreen() {
         {/* Stats Grid with Gradient Cards */}
         <View style={styles.grid}>
           <StatCard
-            title="Active Employees"
+            title="Active Team"
             value={stats.employees}
             icon={Users}
             gradient={["#3b82f6", "#1e40af"]}
@@ -427,7 +427,7 @@ export default function AdminHomeScreen() {
               </View>
               <View style={styles.quickActionText}>
                 <Text style={[styles.quickActionTitle, { color: textMain }]}>
-                  Transfer Employee
+                  Transfer Guy
                 </Text>
                 <Text style={[styles.quickActionSub, { color: textSub }]}>
                   Move between sites

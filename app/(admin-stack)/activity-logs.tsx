@@ -97,7 +97,7 @@ function formatTimestampFull(iso: string) {
 function getMetadataParts(m: Record<string, any>): string | null {
   const parts: string[] = [];
   if (m.siteName) parts.push(`Site: ${m.siteName}`);
-  if (m.employeeName) parts.push(`Employee: ${m.employeeName}`);
+  if (m.employeeName) parts.push(`Guy: ${m.employeeName}`);
   if (m.foremanName) parts.push(`Foreman: ${m.foremanName}`);
   if (m.dayRate) parts.push(`Rate: R${m.dayRate}`);
   if (m.path) parts.push(m.path);

@@ -73,6 +73,17 @@ export function useNetworkStatus() {
 }
 
 /**
+ * Invisible component that mounts the NetInfo subscription driving
+ * lib/offline/networkStatus.ts's `setNetworkStatus`. Must stay mounted
+ * app-wide even where the visual OfflineBanner below isn't rendered -
+ * the offline queue and API retry logic depend on this being live.
+ */
+export function NetworkStatusListener() {
+  useNetworkStatus();
+  return null;
+}
+
+/**
  * Offline indicator banner component
  * Shows "Offline - Showing cached data" when device is offline
  */

@@ -492,7 +492,7 @@ export default function ForemanTimesheets() {
               ListEmptyComponent={
                 <View style={{ padding: 16 }}>
                   <Text style={styles.emptyText}>
-                    No timesheets yet. Scan workers to create days, then they’ll
+                    No timesheets yet. Scan guys to create days, then they’ll
                     group into fortnights.
                   </Text>
 

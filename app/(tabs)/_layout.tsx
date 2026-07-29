@@ -17,7 +17,7 @@ export default function MainLayout() {
       <Tabs>
         <Tabs.Screen name="(admin)/sites" options={{ title: "Sites" }} />
         <Tabs.Screen name="(admin)/home" options={{ title: "Home" }} />
-        <Tabs.Screen name="(admin)/workers" options={{ title: "Workers" }} />
+        <Tabs.Screen name="(admin)/workers" options={{ title: "Team" }} />
         <Tabs.Screen
           name="(admin)/timesheets"
           options={{ title: "Timesheets" }}

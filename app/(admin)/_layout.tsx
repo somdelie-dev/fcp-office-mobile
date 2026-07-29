@@ -90,7 +90,7 @@ export default function AdminTabs() {
         <Tabs.Screen
           name="workers"
           options={{
-            title: "Workers",
+            title: "Team",
             tabBarIcon: ({ color, size, focused }) => (
               <Ionicons
                 name={focused ? "people" : "people-outline"}

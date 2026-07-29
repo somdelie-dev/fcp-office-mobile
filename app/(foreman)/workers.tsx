@@ -100,7 +100,7 @@ export default function ForemanWorkers() {
         </View>
 
         <View style={styles.headerRow}>
-          <Text style={styles.h1}>My Crew</Text>
+          <Text style={styles.h1}>Team</Text>
           <Pressable
             style={styles.primaryBtn}
             onPress={() => router.push("/(foreman-stack)/workers/new")}
@@ -121,7 +121,7 @@ export default function ForemanWorkers() {
 
         <GlassCard style={{ padding: 0, flex: 1 }}>
           <View style={styles.listHeader}>
-            <Text style={styles.listTitle}>Your crew</Text>
+            <Text style={styles.listTitle}>Your Team</Text>
             <Text style={styles.listSub}>
               {loading ? "Loading..." : `${filtered.length} shown`}
             </Text>

@@ -172,7 +172,11 @@ export default function AdminTimesheetsScreen() {
 
   return (
     <AuthStyleBackground>
-      <ScrollView style={styles.wrap} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.wrap}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <GlassCard style={styles.topCard}>
           <Text style={[styles.h1, { color: colors.textPrimary }]}>
             All Timesheets

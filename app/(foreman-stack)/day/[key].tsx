@@ -43,8 +43,8 @@ function statusLabel(s: ForemanDayDetailDto["status"]) {
 }
 
 const REASONS = [
-  "Extra workers (urgent)",
-  "Workers moved from another site",
+  "Extra guys (urgent)",
+  "Guys moved from another site",
   "Subcontractor team",
   "Short-staffed / late arrivals",
   "Other",
@@ -147,7 +147,7 @@ export default function ForemanDayDetails() {
     if (next && scans.length === 0) {
       Alert.alert(
         "Nothing scanned",
-        "Scan at least one worker before marking as ready.",
+        "Scan at least one guy before marking as ready.",
       );
       return;
     }
@@ -248,6 +248,7 @@ export default function ForemanDayDetails() {
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -333,7 +334,7 @@ export default function ForemanDayDetails() {
         <GlassCard style={{ padding: 16 }}>
           <Text style={styles.sectionTitle}>Foreman note</Text>
           <Text style={styles.sectionSub}>
-            Explain anything unusual (extra workers, moved teams, etc.).
+            Explain anything unusual (extra guys, moved teams, etc.).
           </Text>
 
           <View style={styles.reasonWrap}>
@@ -383,7 +384,7 @@ export default function ForemanDayDetails() {
         {/* Scans list + search */}
         <GlassCard style={{ padding: 0 }}>
           <View style={styles.listHeader}>
-            <Text style={styles.listTitle}>Workers Scanned</Text>
+            <Text style={styles.listTitle}>Team Scanned</Text>
             <Text style={styles.listSub}>
               {filteredScans.length} shown • {scans.length} total
             </Text>

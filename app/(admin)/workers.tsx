@@ -1,6 +1,7 @@
 import { AuthStyleBackground } from "@/components/AuthStyleBackground";
 import { GlassCard } from "@/components/GlassCard";
 import { Avatar, OptimizedImage } from "@/components/OptimizedImage";
+import { ZoomableImage } from "@/components/ZoomableImage";
 import { apiEmployeesCached, type ApiEmployee } from "@/lib/apiClient";
 import { apiFetch, getApiBase, getToken } from "@/lib/api";
 import { useTheme } from "@/lib/themeContext";
@@ -12,9 +13,11 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Maximize2,
   MoreVertical,
   Eye,
   Download,
+  Pencil,
   Plus,
   X,
 } from "lucide-react-native";
@@ -22,6 +25,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -43,6 +47,8 @@ type SortDir = "asc" | "desc";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 interface Employee {
   id: string;
@@ -103,8 +109,8 @@ export default function AdminWorkersScreen() {
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterMode>("active");
-  const [sortField, setSortField] = useState<SortField>("name");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [sortField, setSortField] = useState<SortField>("createdAt");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -117,10 +123,15 @@ export default function AdminWorkersScreen() {
     null,
   );
   const [showDetail, setShowDetail] = useState(false);
+  const [showImageZoom, setShowImageZoom] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(
+    null,
+  );
   const [createFirstName, setCreateFirstName] = useState("");
   const [createLastName, setCreateLastName] = useState("");
   const [createPhone, setCreatePhone] = useState("");
+  const [createDayRate, setCreateDayRate] = useState("");
   const [createPhoto, setCreatePhoto] = useState<{
     uri: string;
     name: string;
@@ -138,7 +149,7 @@ export default function AdminWorkersScreen() {
       const mapped = (res.employees || []).map(mapApiEmployee);
       setEmployees(mapped);
     } catch (e: any) {
-      setError(e?.message || "Failed to load employees");
+      setError(e?.message || "Failed to load team");
       console.error("Failed to load employees:", e);
     } finally {
       setLoading(false);
@@ -206,7 +217,9 @@ export default function AdminWorkersScreen() {
           cmp = a.qrCodeValue.localeCompare(b.qrCodeValue);
           break;
         case "createdAt":
-          cmp = (a.createdAt ?? "").localeCompare(b.createdAt ?? "");
+          cmp =
+            new Date(a.createdAt ?? 0).getTime() -
+            new Date(b.createdAt ?? 0).getTime();
           break;
         case "status":
           cmp = (a.isActive ? 1 : 0) - (b.isActive ? 1 : 0);
@@ -249,20 +262,32 @@ export default function AdminWorkersScreen() {
   const headerBg = isDark ? "rgba(30,41,59,0.9)" : "rgba(241,245,249,0.9)";
   const borderColor = isDark ? "#334155" : "#e2e8f0";
 
-  // Create employee handler
-  async function handleCreateEmployee() {
+  // Create/edit employee handler
+  async function handleSaveEmployee() {
+    const isEditing = !!editingEmployeeId;
     const fn = createFirstName.trim();
     const ln = createLastName.trim();
     const ph = createPhone.trim();
-    if (!fn || !ln || !ph) {
-      setCreateError("First name, last name and phone are required");
+    if (!fn || !ln) {
+      setCreateError("First name and last name are required");
+      return;
+    }
+    // Day rate is only editable for foreman employees (backend rule); regular
+    // employees' day rate comes from company settings.
+    const canEditDayRate = isEditing && !!selectedEmployee?.isForeman;
+    const dayRateTrimmed = createDayRate.trim();
+    const dayRate = dayRateTrimmed ? Number(dayRateTrimmed) : undefined;
+    if (canEditDayRate && dayRateTrimmed && Number.isNaN(dayRate)) {
+      setCreateError("Day rate must be a number");
       return;
     }
     setCreating(true);
     setCreateError("");
     try {
-      // Upload photo first if one was taken
-      let faceImageUrl: string | null = null;
+      // Upload photo first if a new one was taken/picked
+      let faceImageUrl: string | null | undefined = isEditing
+        ? undefined // undefined = leave existing photo untouched
+        : null;
       if (createPhoto) {
         const compressed = await compressImage(createPhoto.uri, {
           maxWidth: 800,
@@ -284,23 +309,48 @@ export default function AdminWorkersScreen() {
         faceImageUrl = uploadRes?.url || null;
       }
 
-      await apiFetch("/api/employees", {
-        method: "POST",
-        body: JSON.stringify({
+      if (isEditing) {
+        const payload: Record<string, unknown> = {
+          id: editingEmployeeId,
           firstName: fn,
           lastName: ln,
           phone: ph,
-          faceImageUrl,
-        }),
-      });
+        };
+        if (faceImageUrl !== undefined) {
+          payload.faceImageUrl = faceImageUrl;
+        }
+        if (canEditDayRate && dayRateTrimmed) {
+          payload.defaultDayRate = dayRate;
+        }
+        // The update route lives on the collection endpoint (PUT /api/employees
+        // with `id` in the body) — /api/employees/:id only supports GET/DELETE.
+        await apiFetch("/api/employees", {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await apiFetch("/api/employees", {
+          method: "POST",
+          body: JSON.stringify({
+            firstName: fn,
+            lastName: ln,
+            phone: ph,
+            faceImageUrl,
+          }),
+        });
+      }
       setShowCreate(false);
+      setEditingEmployeeId(null);
       setCreateFirstName("");
       setCreateLastName("");
       setCreatePhone("");
+      setCreateDayRate("");
       setCreatePhoto(null);
       await loadEmployees(true);
     } catch (e: any) {
-      setCreateError(e?.message || "Failed to create employee");
+      setCreateError(
+        e?.message || (isEditing ? "Failed to update guy" : "Failed to create guy"),
+      );
     } finally {
       setCreating(false);
     }
@@ -321,26 +371,28 @@ export default function AdminWorkersScreen() {
     }
   }, []);
 
-  const renderTableRow = useCallback(
-    ({ item, index }: { item: Employee; index: number }) => (
-      <TableRow
+  const actionsEmployee = useMemo(
+    () => employees.find((e) => e.id === actionsId) ?? null,
+    [employees, actionsId],
+  );
+
+  const renderGridItem = useCallback(
+    ({ item }: { item: Employee }) => (
+      <GridCard
         item={item}
-        index={index}
         isDark={isDark}
         textMain={textMain}
         textSub={textSub}
         borderColor={borderColor}
-        actionsId={actionsId}
-        setActionsId={setActionsId}
         onViewDetails={(emp) => {
           setSelectedEmployee(emp);
           setShowDetail(true);
           setActionsId(null);
         }}
-        onDownloadCard={handleDownloadCard}
+        onOpenActions={(emp) => setActionsId(emp.id)}
       />
     ),
-    [isDark, textMain, textSub, borderColor, actionsId, handleDownloadCard],
+    [isDark, textMain, textSub, borderColor],
   );
 
   return (
@@ -350,26 +402,28 @@ export default function AdminWorkersScreen() {
         <GlassCard style={[styles.headerCard, { backgroundColor: cardBg }]}>
           <View style={styles.headerRow}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.h1, { color: textMain }]}>Employees</Text>
+              <Text style={[styles.h1, { color: textMain }]}>Team</Text>
               <Text style={[styles.sub, { color: textSub }]}>
                 {loading
                   ? "Loading..."
-                  : `${filteredAndSorted.length} of ${employees.length} employees`}
+                  : `${filteredAndSorted.length} of ${employees.length} team members`}
               </Text>
             </View>
             <Pressable
               style={styles.addBtn}
               onPress={() => {
+                setEditingEmployeeId(null);
                 setCreateFirstName("");
                 setCreateLastName("");
                 setCreatePhone("");
+                setCreateDayRate("");
                 setCreatePhoto(null);
                 setCreateError("");
                 setShowCreate(true);
               }}
             >
               <Plus size={16} color="#fff" />
-              <Text style={styles.addBtnText}>New Employee</Text>
+              <Text style={styles.addBtnText}>New Guy</Text>
             </Pressable>
           </View>
 
@@ -391,7 +445,7 @@ export default function AdminWorkersScreen() {
             ]}
           />
 
-          <View style={styles.filterRow}>
+          {/* <View style={styles.filterRow}>
             <FilterPill
               label="Active"
               active={filter === "active"}
@@ -404,7 +458,7 @@ export default function AdminWorkersScreen() {
               onPress={() => setFilter("all")}
               isDark={isDark}
             />
-          </View>
+          </View> */}
         </GlassCard>
 
         {/* Data Table */}
@@ -423,120 +477,89 @@ export default function AdminWorkersScreen() {
             </View>
           )}
 
-          {/* Table Header */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={{ minWidth: 820 }}>
-              <View style={[styles.tableHeader, { backgroundColor: headerBg }]}>
-                <SortableHeader
-                  label="Employee"
-                  field="name"
-                  currentField={sortField}
-                  currentDir={sortDir}
-                  onPress={toggleSort}
-                  style={styles.colEmployee}
-                  isDark={isDark}
-                />
-                <View style={[styles.headerCell, styles.colPhone]}>
-                  <Text
-                    style={[
-                      styles.headerText,
-                      { color: isDark ? "#cbd5e1" : "#475569" },
-                    ]}
-                  >
-                    PHONE
-                  </Text>
-                </View>
-                <SortableHeader
-                  label="Day Rate"
-                  field="dayRate"
-                  currentField={sortField}
-                  currentDir={sortDir}
-                  onPress={toggleSort}
-                  style={styles.colRate}
-                  isDark={isDark}
-                />
-                <SortableHeader
-                  label="QR Code"
-                  field="code"
-                  currentField={sortField}
-                  currentDir={sortDir}
-                  onPress={toggleSort}
-                  style={styles.colCode}
-                  isDark={isDark}
-                />
-                <SortableHeader
-                  label="Added"
-                  field="createdAt"
-                  currentField={sortField}
-                  currentDir={sortDir}
-                  onPress={toggleSort}
-                  style={styles.colDate}
-                  isDark={isDark}
-                />
-                <View style={styles.colActions}>
-                  <Text
-                    style={[
-                      styles.headerText,
-                      {
-                        color: isDark ? "#cbd5e1" : "#475569",
-                        textAlign: "center",
-                      },
-                    ]}
-                  >
-                    ACTIONS
-                  </Text>
-                </View>
-              </View>
+          {/* Sort Bar */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{
+              flexGrow: 0,
+              height: 52,
+            }}
+            contentContainerStyle={{
+              alignItems: "center",
+              paddingHorizontal: 12,
+            }}
+          >
+            <SortChip
+              label="Name"
+              field="name"
+              currentField={sortField}
+              currentDir={sortDir}
+              onPress={toggleSort}
+              isDark={isDark}
+            />
 
-              {/* Table Body */}
-              {loading && !refreshing ? (
-                <View style={styles.loadingWrap}>
-                  <ActivityIndicator
-                    size="large"
-                    color={isDark ? "#38bdf8" : "#0ea5e9"}
-                  />
-                  <Text style={[styles.loadingText, { color: textSub }]}>
-                    Loading employees...
+            <SortChip
+              label="Added"
+              field="createdAt"
+              currentField={sortField}
+              currentDir={sortDir}
+              onPress={toggleSort}
+              isDark={isDark}
+            />
+            <SortChip
+              label="Status"
+              field="status"
+              currentField={sortField}
+              currentDir={sortDir}
+              onPress={toggleSort}
+              isDark={isDark}
+            />
+          </ScrollView>
+
+          {/* Grid Body */}
+          {loading && !refreshing ? (
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator
+                size="large"
+                color={isDark ? "#38bdf8" : "#0ea5e9"}
+              />
+              <Text style={[styles.loadingText, { color: textSub }]}>
+                Loading team...
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              style={{ flex: 1 }}
+              data={paginatedData}
+              keyExtractor={(e) => e.id}
+              renderItem={renderGridItem}
+              numColumns={2}
+              columnWrapperStyle={gridStyles.row}
+              contentContainerStyle={gridStyles.listContent}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+              initialNumToRender={pageSize}
+              maxToRenderPerBatch={pageSize}
+              windowSize={5}
+              removeClippedSubviews
+              ListEmptyComponent={
+                <View style={styles.emptyWrap}>
+                  <Text style={[styles.emptyTitle, { color: textMain }]}>
+                    {debouncedSearch
+                      ? "No team members match this search"
+                      : "No team members found"}
+                  </Text>
+                  <Text style={[styles.emptySub, { color: textSub }]}>
+                    {debouncedSearch
+                      ? "Try a different search term."
+                      : "Adjust filters or add a new guy."}
                   </Text>
                 </View>
-              ) : (
-                <FlatList
-                  data={paginatedData}
-                  keyExtractor={(e) => e.id}
-                  renderItem={renderTableRow}
-                  refreshControl={
-                    <RefreshControl
-                      refreshing={refreshing}
-                      onRefresh={onRefresh}
-                    />
-                  }
-                  initialNumToRender={pageSize}
-                  maxToRenderPerBatch={pageSize}
-                  windowSize={5}
-                  removeClippedSubviews
-                  getItemLayout={(_, index) => ({
-                    length: 56,
-                    offset: 56 * index,
-                    index,
-                  })}
-                  ListEmptyComponent={
-                    <View style={styles.emptyWrap}>
-                      <Text style={[styles.emptyTitle, { color: textMain }]}>
-                        {debouncedSearch
-                          ? "No employees match this search"
-                          : "No employees found"}
-                      </Text>
-                      <Text style={[styles.emptySub, { color: textSub }]}>
-                        {debouncedSearch
-                          ? "Try a different search term."
-                          : "Adjust filters or add a new employee."}
-                      </Text>
-                    </View>
-                  }
-                />
-              )}
-            </View>
-          </ScrollView>
+              }
+            />
+          )}
 
           {/* Pagination Controls - Outside ScrollView so always visible */}
           {totalItems > 0 && (
@@ -649,7 +672,10 @@ export default function AdminWorkersScreen() {
         visible={showDetail}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowDetail(false)}
+        onRequestClose={() => {
+          setShowDetail(false);
+          setShowImageZoom(false);
+        }}
       >
         <View style={modalStyles.overlay}>
           <View
@@ -665,11 +691,40 @@ export default function AdminWorkersScreen() {
             <View style={modalStyles.handle} />
             <View style={modalStyles.headerRow}>
               <Text style={[modalStyles.title, { color: textMain }]}>
-                Employee Details
+                Details
               </Text>
-              <Pressable onPress={() => setShowDetail(false)}>
-                <X size={22} color={textSub} />
-              </Pressable>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+                {selectedEmployee && (
+                  <Pressable
+                    onPress={() => {
+                      setEditingEmployeeId(selectedEmployee.id);
+                      setCreateFirstName(selectedEmployee.firstName);
+                      setCreateLastName(selectedEmployee.lastName);
+                      setCreatePhone(selectedEmployee.phone || "");
+                      setCreateDayRate(
+                        selectedEmployee.defaultDayRate
+                          ? String(selectedEmployee.defaultDayRate)
+                          : "",
+                      );
+                      setCreatePhoto(null);
+                      setCreateError("");
+                      setShowDetail(false);
+                      setShowImageZoom(false);
+                      setShowCreate(true);
+                    }}
+                  >
+                    <Pencil size={20} color={textSub} />
+                  </Pressable>
+                )}
+                <Pressable
+                  onPress={() => {
+                    setShowDetail(false);
+                    setShowImageZoom(false);
+                  }}
+                >
+                  <X size={22} color={textSub} />
+                </Pressable>
+              </View>
             </View>
 
             {selectedEmployee && (
@@ -678,13 +733,24 @@ export default function AdminWorkersScreen() {
               >
                 {/* Avatar + Name */}
                 <View style={{ alignItems: "center", gap: 10 }}>
-                  <OptimizedImage
-                    uri={selectedEmployee.faceImageUrl}
-                    fallbackName={`${selectedEmployee.firstName} ${selectedEmployee.lastName}`}
-                    borderRadius={6}
-                    isAvatar={false}
-                    style={{ width: 72, height: 72 }}
-                  />
+                  <Pressable
+                    onPress={() => setShowImageZoom(true)}
+                    hitSlop={10}
+                    style={{ width: 140, height: 140 }}
+                  >
+                    <OptimizedImage
+                      uri={selectedEmployee.faceImageUrl}
+                      fallbackName={`${selectedEmployee.firstName} ${selectedEmployee.lastName}`}
+                      borderRadius={12}
+                      isAvatar={false}
+                      style={{ width: 140, height: 140 }}
+                    />
+                    {selectedEmployee.faceImageUrl && (
+                      <View style={modalStyles.zoomBadge}>
+                        <Maximize2 size={14} color="#fff" />
+                      </View>
+                    )}
+                  </Pressable>
                   <Text
                     style={{
                       fontSize: 20,
@@ -736,15 +802,123 @@ export default function AdminWorkersScreen() {
               </ScrollView>
             )}
           </View>
+
+          {/* Full-screen image zoom, layered above the sheet in the same Modal */}
+          {showImageZoom && selectedEmployee?.faceImageUrl && (
+            <View style={modalStyles.zoomOverlay}>
+              <Pressable
+                style={modalStyles.zoomClose}
+                onPress={() => setShowImageZoom(false)}
+              >
+                <X size={26} color="#fff" />
+              </Pressable>
+              <ZoomableImage
+                uri={selectedEmployee.faceImageUrl}
+                width={SCREEN_WIDTH - 32}
+                height={SCREEN_WIDTH - 32}
+                borderRadius={12}
+              />
+            </View>
+          )}
         </View>
       </Modal>
 
-      {/* ── Create Employee Modal ── */}
+      {/* ── Card Actions Sheet ── */}
+      <Modal
+        visible={!!actionsId}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActionsId(null)}
+      >
+        <Pressable
+          style={modalStyles.overlay}
+          onPress={() => setActionsId(null)}
+        >
+          <Pressable
+            style={[
+              gridStyles.actionSheet,
+              {
+                backgroundColor: isDark
+                  ? "rgba(15,23,42,0.98)"
+                  : "rgba(255,255,255,0.98)",
+                borderColor,
+              },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={modalStyles.handle} />
+            {actionsEmployee && (
+              <>
+                <Text
+                  style={[gridStyles.actionSheetTitle, { color: textMain }]}
+                  numberOfLines={1}
+                >
+                  {actionsEmployee.firstName} {actionsEmployee.lastName}
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.dropdownItem,
+                    {
+                      backgroundColor: pressed
+                        ? isDark
+                          ? "rgba(56,189,248,0.1)"
+                          : "rgba(14,165,233,0.06)"
+                        : "transparent",
+                      borderRadius: 8,
+                    },
+                  ]}
+                  onPress={() => {
+                    setSelectedEmployee(actionsEmployee);
+                    setShowDetail(true);
+                    setActionsId(null);
+                  }}
+                >
+                  <Eye size={16} color={isDark ? "#38bdf8" : "#0ea5e9"} />
+                  <Text
+                    style={{ color: textMain, fontSize: 14, fontWeight: "700" }}
+                  >
+                    View Details
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.dropdownItem,
+                    {
+                      backgroundColor: pressed
+                        ? isDark
+                          ? "rgba(16,185,129,0.1)"
+                          : "rgba(16,185,129,0.06)"
+                        : "transparent",
+                      borderRadius: 8,
+                    },
+                  ]}
+                  onPress={() => {
+                    setActionsId(null);
+                    handleDownloadCard(actionsEmployee);
+                  }}
+                >
+                  <Download size={16} color="#10b981" />
+                  <Text
+                    style={{ color: textMain, fontSize: 14, fontWeight: "700" }}
+                  >
+                    Download Card
+                  </Text>
+                </Pressable>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── Create / Edit Employee Modal ── */}
       <Modal
         visible={showCreate}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowCreate(false)}
+        onRequestClose={() => {
+          setShowCreate(false);
+          setEditingEmployeeId(null);
+        }}
       >
         <KeyboardAvoidingView
           style={{ flex: 1 }}
@@ -764,14 +938,21 @@ export default function AdminWorkersScreen() {
             >
               <View style={modalStyles.headerRow}>
                 <Text style={[modalStyles.title, { color: textMain }]}>
-                  Create a New Employee
+                  {editingEmployeeId ? "Edit Guy" : "Create a New Guy"}
                 </Text>
-                <Pressable onPress={() => setShowCreate(false)}>
+                <Pressable
+                  onPress={() => {
+                    setShowCreate(false);
+                    setEditingEmployeeId(null);
+                  }}
+                >
                   <X size={22} color={textSub} />
                 </Pressable>
               </View>
               <Text style={{ color: textSub, fontSize: 13, marginBottom: 12 }}>
-                Add a new worker to your organization.
+                {editingEmployeeId
+                  ? "Update this guy's details."
+                  : "Add a new guy to your organization."}
               </Text>
 
               <ScrollView
@@ -859,7 +1040,7 @@ export default function AdminWorkersScreen() {
                     marginTop: 10,
                   }}
                 >
-                  Phone *
+                  Phone
                 </Text>
                 <TextInput
                   value={createPhone}
@@ -878,6 +1059,51 @@ export default function AdminWorkersScreen() {
                     },
                   ]}
                 />
+
+                {editingEmployeeId && selectedEmployee?.isForeman && (
+                  <>
+                    <Text
+                      style={{
+                        color: textMain,
+                        fontSize: 13,
+                        fontWeight: "700",
+                        marginBottom: 4,
+                        marginTop: 10,
+                      }}
+                    >
+                      Day Rate
+                    </Text>
+                    <TextInput
+                      value={createDayRate}
+                      onChangeText={setCreateDayRate}
+                      placeholder="e.g. 350"
+                      placeholderTextColor={isDark ? "#64748b" : "#9ca3af"}
+                      keyboardType="numeric"
+                      style={[
+                        modalStyles.input,
+                        {
+                          color: textMain,
+                          borderColor,
+                          backgroundColor: isDark
+                            ? "rgba(30,41,59,0.8)"
+                            : "rgba(241,245,249,0.8)",
+                        },
+                      ]}
+                    />
+                  </>
+                )}
+                {editingEmployeeId && !selectedEmployee?.isForeman && (
+                  <Text
+                    style={{
+                      color: textSub,
+                      fontSize: 12,
+                      marginTop: 10,
+                    }}
+                  >
+                    Day rate for non-foreman guys is set from company
+                    settings and can't be edited here.
+                  </Text>
+                )}
 
                 <Text
                   style={{
@@ -1207,7 +1433,10 @@ export default function AdminWorkersScreen() {
                 }}
               >
                 <Pressable
-                  onPress={() => setShowCreate(false)}
+                  onPress={() => {
+                    setShowCreate(false);
+                    setEditingEmployeeId(null);
+                  }}
                   style={[
                     modalStyles.cancelBtn,
                     {
@@ -1224,7 +1453,7 @@ export default function AdminWorkersScreen() {
                   </Text>
                 </Pressable>
                 <Pressable
-                  onPress={handleCreateEmployee}
+                  onPress={handleSaveEmployee}
                   disabled={creating}
                   style={[
                     modalStyles.submitBtn,
@@ -1237,7 +1466,7 @@ export default function AdminWorkersScreen() {
                     <Text
                       style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}
                     >
-                      Create Employee
+                      {editingEmployeeId ? "Save Changes" : "Create Guy"}
                     </Text>
                   )}
                 </Pressable>
@@ -1250,13 +1479,12 @@ export default function AdminWorkersScreen() {
   );
 }
 
-function SortableHeader({
+function SortChip({
   label,
   field,
   currentField,
   currentDir,
   onPress,
-  style,
   isDark,
 }: {
   label: string;
@@ -1264,232 +1492,139 @@ function SortableHeader({
   currentField: SortField;
   currentDir: SortDir;
   onPress: (field: SortField) => void;
-  style?: any;
   isDark: boolean;
 }) {
   const isActive = currentField === field;
-  const textColor = isDark ? "#cbd5e1" : "#475569";
   const activeColor = isDark ? "#38bdf8" : "#0ea5e9";
-
-  const SortIcon =
-    isActive && currentDir === "asc" ? (
-      <ChevronUp size={14} color={activeColor} />
-    ) : isActive ? (
-      <ChevronDown size={14} color={activeColor} />
-    ) : null;
 
   return (
     <Pressable
-      style={[styles.headerCell, style]}
       onPress={() => onPress(field)}
+      style={[
+        gridStyles.sortChip,
+        {
+          backgroundColor: isActive
+            ? isDark
+              ? "rgba(56,189,248,0.18)"
+              : "rgba(14,165,233,0.1)"
+            : isDark
+              ? "rgba(51,65,85,0.4)"
+              : "rgba(255,255,255,0.9)",
+          borderColor: isActive ? activeColor : isDark ? "#334155" : "#e2e8f0",
+        },
+      ]}
     >
       <Text
         style={[
-          styles.headerText,
-          { color: isActive ? activeColor : textColor },
+          gridStyles.sortChipText,
+          { color: isActive ? activeColor : isDark ? "#cbd5e1" : "#475569" },
         ]}
       >
         {label}
       </Text>
-      {SortIcon}
+      {isActive &&
+        (currentDir === "asc" ? (
+          <ChevronUp size={12} color={activeColor} />
+        ) : (
+          <ChevronDown size={12} color={activeColor} />
+        ))}
     </Pressable>
   );
 }
 
-const TableRow = React.memo(function TableRow({
+const GridCard = React.memo(function GridCard({
   item,
-  index,
   isDark,
   textMain,
   textSub,
-  actionsId,
-  setActionsId,
+  borderColor,
   onViewDetails,
-  onDownloadCard,
+  onOpenActions,
 }: {
   item: Employee;
-  index: number;
   isDark: boolean;
   textMain: string;
   textSub: string;
   borderColor: string;
-  actionsId: string | null;
-  setActionsId: (id: string | null) => void;
   onViewDetails: (emp: Employee) => void;
-  onDownloadCard: (emp: Employee) => void;
+  onOpenActions: (emp: Employee) => void;
 }) {
   const fullName = `${item.firstName} ${item.lastName}`;
-  const rowBg =
-    index % 2 === 0
-      ? isDark
-        ? "rgba(30,41,59,0.3)"
-        : "rgba(248,250,252,0.5)"
-      : "transparent";
-  const isOpen = actionsId === item.id;
+  const cardBg = isDark ? "rgba(30,41,59,0.5)" : "rgba(255,255,255,0.95)";
 
   return (
-    <View style={[styles.tableRow, { backgroundColor: rowBg }]}>
-      {/* Employee column – avatar + name + badges */}
-      <View style={styles.colEmployee}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <OptimizedImage
-            uri={item.faceImageUrl}
-            fallbackName={fullName}
-            borderRadius={4}
-            isAvatar={false}
-            style={{ width: 40, height: 40 }}
-          />
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text
-              style={[styles.cellText, { color: textMain }]}
-              numberOfLines={1}
+    <Pressable
+      onPress={() => onViewDetails(item)}
+      style={({ pressed }) => [
+        gridStyles.card,
+        {
+          backgroundColor: cardBg,
+          borderColor,
+          opacity: pressed ? 0.85 : 1,
+        },
+      ]}
+    >
+      <Pressable
+        onPress={() => onOpenActions(item)}
+        hitSlop={8}
+        style={[
+          gridStyles.kebabBtn,
+          {
+            backgroundColor: isDark
+              ? "rgba(15,23,42,0.6)"
+              : "rgba(241,245,249,0.9)",
+            borderColor,
+          },
+        ]}
+      >
+        <MoreVertical size={15} color={isDark ? "#94a3b8" : "#64748b"} />
+      </Pressable>
+
+      <View style={gridStyles.imageContainer}>
+        <OptimizedImage
+          uri={item.faceImageUrl}
+          fallbackName={fullName}
+          borderRadius={0}
+          isAvatar={false}
+          contentFit="cover"
+          style={{
+            width: "100%",
+            height: 120,
+          }}
+        />
+      </View>
+
+      <View style={gridStyles.cardContent}>
+        <Text style={[gridStyles.name, { color: textMain }]} numberOfLines={1}>
+          {fullName}
+        </Text>
+
+        <View style={gridStyles.badgeRow}>
+          <RoleBadge isForeman={item.isForeman} isDark={isDark} />
+          {!item.isActive && (
+            <View
+              style={[
+                styles.roleBadge,
+                {
+                  backgroundColor: isDark
+                    ? "rgba(239,68,68,0.2)"
+                    : "rgba(239,68,68,0.12)",
+                },
+              ]}
             >
-              {fullName}
-            </Text>
-            <View style={{ flexDirection: "row", gap: 4 }}>
-              <RoleBadge isForeman={item.isForeman} isDark={isDark} />
-              {!item.isActive && (
-                <View
-                  style={[
-                    styles.roleBadge,
-                    {
-                      backgroundColor: isDark
-                        ? "rgba(239,68,68,0.2)"
-                        : "rgba(239,68,68,0.12)",
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.roleBadgeText,
-                      { color: isDark ? "#f87171" : "#dc2626" },
-                    ]}
-                  >
-                    Inactive
-                  </Text>
-                </View>
-              )}
+              <Text
+                style={[
+                  styles.roleBadgeText,
+                  { color: isDark ? "#f87171" : "#dc2626" },
+                ]}
+              >
+                Inactive
+              </Text>
             </View>
-          </View>
+          )}
         </View>
       </View>
-
-      {/* Phone */}
-      <View style={styles.colPhone}>
-        <Text
-          style={[styles.cellTextSmall, { color: textSub }]}
-          numberOfLines={1}
-        >
-          {item.phone || "—"}
-        </Text>
-      </View>
-
-      {/* Day Rate */}
-      <View style={styles.colRate}>
-        <Text style={[styles.cellText, { color: textMain }]} numberOfLines={1}>
-          {item.defaultDayRate
-            ? formatMoney(item.defaultDayRate)
-            : "Company default"}
-        </Text>
-      </View>
-
-      {/* QR Code */}
-      <View style={styles.colCode}>
-        <Text
-          style={[styles.cellTextMono, { color: textSub }]}
-          numberOfLines={1}
-        >
-          {item.qrCodeValue || "—"}
-        </Text>
-      </View>
-
-      {/* Added */}
-      <View style={styles.colDate}>
-        <Text
-          style={[styles.cellTextSmall, { color: textSub }]}
-          numberOfLines={1}
-        >
-          {formatDate(item.createdAt)}
-        </Text>
-      </View>
-
-      {/* Actions */}
-      <View style={styles.colActions}>
-        <Pressable
-          onPress={() => setActionsId(isOpen ? null : item.id)}
-          style={[
-            styles.actionsBtn,
-            {
-              backgroundColor: isOpen
-                ? isDark
-                  ? "rgba(56,189,248,0.15)"
-                  : "rgba(14,165,233,0.1)"
-                : "transparent",
-              borderColor: isDark ? "#334155" : "#e2e8f0",
-            },
-          ]}
-        >
-          <MoreVertical size={16} color={isDark ? "#94a3b8" : "#64748b"} />
-        </Pressable>
-        {isOpen && (
-          <View
-            style={[
-              styles.dropdown,
-              {
-                backgroundColor: isDark
-                  ? "rgba(15,23,42,0.98)"
-                  : "rgba(255,255,255,0.98)",
-                borderColor: isDark ? "#334155" : "#e2e8f0",
-              },
-            ]}
-          >
-            <Pressable
-              style={({ pressed }) => [
-                styles.dropdownItem,
-                {
-                  backgroundColor: pressed
-                    ? isDark
-                      ? "rgba(56,189,248,0.1)"
-                      : "rgba(14,165,233,0.06)"
-                    : "transparent",
-                },
-              ]}
-              onPress={() => onViewDetails(item)}
-            >
-              <Eye size={15} color={isDark ? "#38bdf8" : "#0ea5e9"} />
-              <Text
-                style={{ color: textMain, fontSize: 13, fontWeight: "700" }}
-              >
-                View Details
-              </Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.dropdownItem,
-                {
-                  backgroundColor: pressed
-                    ? isDark
-                      ? "rgba(16,185,129,0.1)"
-                      : "rgba(16,185,129,0.06)"
-                    : "transparent",
-                },
-              ]}
-              onPress={() => {
-                setActionsId(null);
-                onDownloadCard(item);
-              }}
-            >
-              <Download size={15} color="#10b981" />
-              <Text
-                style={{ color: textMain, fontSize: 13, fontWeight: "700" }}
-              >
-                Download Card
-              </Text>
-            </Pressable>
-          </View>
-        )}
-      </View>
-    </View>
+    </Pressable>
   );
 });
 
@@ -1673,8 +1808,8 @@ function FilterPill({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 12,
-    gap: 12,
+    paddingHorizontal: 10,
+    gap: 10,
   },
   headerCard: {
     padding: 14,
@@ -1697,7 +1832,7 @@ const styles = StyleSheet.create({
   addBtn: {
     backgroundColor: "#ea580c",
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: 6,
     flexDirection: "row",
     alignItems: "center",
@@ -1709,7 +1844,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   searchInput: {
-    height: 40,
+    height: 35,
     borderRadius: 6,
     paddingHorizontal: 12,
     fontWeight: "700",
@@ -1724,95 +1859,18 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: "hidden",
   },
-  tableHeader: {
-    flexDirection: "row",
-    alignItems: "stretch",
-    height: 44,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.1)",
-  },
-  headerCell: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    borderRightWidth: 1,
-    borderRightColor: "rgba(0,0,0,0.1)",
-  },
-  headerText: {
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  tableRow: {
-    flexDirection: "row",
-    alignItems: "stretch",
-    minHeight: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.08)",
-  },
-  colEmployee: {
-    width: 230,
-    paddingHorizontal: 10,
-    justifyContent: "center",
-    borderRightWidth: 1,
-    borderRightColor: "rgba(0,0,0,0.08)",
-  },
-  colCode: {
-    width: 120,
-    paddingHorizontal: 8,
-    justifyContent: "center",
-    borderRightWidth: 1,
-    borderRightColor: "rgba(0,0,0,0.08)",
-  },
-  colRate: {
-    width: 120,
-    paddingHorizontal: 8,
-    justifyContent: "center",
-    borderRightWidth: 1,
-    borderRightColor: "rgba(0,0,0,0.08)",
-  },
-  colDate: {
-    width: 110,
-    paddingHorizontal: 8,
-    justifyContent: "center",
-    borderRightWidth: 1,
-    borderRightColor: "rgba(0,0,0,0.08)",
-  },
-  colPhone: {
-    width: 120,
-    paddingHorizontal: 8,
-    justifyContent: "center",
-    borderRightWidth: 1,
-    borderRightColor: "rgba(0,0,0,0.08)",
-  },
-  colActions: {
-    width: 70,
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
-  cellText: {
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  cellTextMono: {
-    fontSize: 12,
-    fontWeight: "600",
-    fontFamily: "monospace",
-  },
-  cellTextSmall: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
   roleBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
     alignSelf: "flex-start",
   },
+  // imageContainer: {
+  //   width: "100%",
+  //   height: 20,
+  //   overflow: "hidden",
+  //   marginBottom: 0,
+  // },
   roleBadgeText: {
     fontSize: 10,
     fontWeight: "800",
@@ -1953,29 +2011,6 @@ const styles = StyleSheet.create({
     minWidth: 60,
     textAlign: "center",
   },
-  actionsBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dropdown: {
-    position: "absolute",
-    top: 38,
-    right: 4,
-    minWidth: 150,
-    borderRadius: 8,
-    borderWidth: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    zIndex: 999,
-    overflow: "hidden",
-  },
   dropdownItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -2008,6 +2043,35 @@ const modalStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
+  },
+  zoomOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.95)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+  },
+  zoomClose: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    zIndex: 1,
+    padding: 8,
+  },
+  zoomBadge: {
+    position: "absolute",
+    bottom: 4,
+    right: 4,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   sheet: {
     borderTopLeftRadius: 20,
@@ -2052,5 +2116,108 @@ const modalStyles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 6,
+  },
+});
+
+const gridStyles = StyleSheet.create({
+  sortBarScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+    height: 52,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.08)",
+  },
+  sortBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+
+  sortChip: {
+    minWidth: 110,
+    height: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    marginRight: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+
+  sortChipText: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  listContent: {
+    padding: 12,
+    gap: 12,
+  },
+  row: {
+    gap: 12,
+  },
+  card: {
+    flex: 1,
+    borderRadius: 0,
+    borderWidth: 1,
+    overflow: "hidden",
+    padding: 0,
+  },
+  kebabBtn: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
+  },
+  imageContainer: {
+    width: "100%",
+    height: 100,
+    overflow: "hidden",
+  },
+  cardContent: {
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 12,
+  },
+  avatarWrap: {
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  name: {
+    fontSize: 14,
+    fontWeight: "800",
+    textAlign: "center",
+    maxWidth: "100%",
+  },
+  badgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 4,
+    marginTop: 6,
+  },
+  actionSheet: {
+    width: "100%",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    padding: 16,
+    paddingBottom: 28,
+    gap: 4,
+  },
+  actionSheetTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    marginBottom: 8,
+    paddingHorizontal: 4,
   },
 });

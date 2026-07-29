@@ -778,7 +778,7 @@ export default function AdminTimesheetDetail() {
                   color: colors.textPrimary,
                 }}
               >
-                No Employee Data
+                No Team Data
               </Text>
               <Text
                 style={{
@@ -1146,7 +1146,7 @@ export default function AdminTimesheetDetail() {
                         fontSize: 12,
                       }}
                     >
-                      âœ… Present = worker scanned that day â€¢ âŒ Absent = no
+                      âœ… Present = guy scanned that day â€¢ âŒ Absent = no
                       scan
                     </Text>
                   </View>

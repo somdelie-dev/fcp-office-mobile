@@ -1,4 +1,5 @@
 import { GradientBackground } from "@/components/GradientBackground";
+import { SyncQueueIcon } from "@/components/OfflineStatus";
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import React from "react";
@@ -50,6 +51,7 @@ export default function ForemanTabs() {
       <Tabs
         screenOptions={{
           headerTitle: () => <LogoHeader />,
+          headerRight: () => <SyncQueueIcon />,
           headerShadowVisible: true,
           headerStyle: {
             backgroundColor: colors.headerBg,
@@ -128,7 +130,7 @@ export default function ForemanTabs() {
         <Tabs.Screen
           name="workers"
           options={{
-            title: "My Crew",
+            title: "Team",
             tabBarIcon: ({ color, size, focused }) => (
               <Ionicons
                 name={focused ? "people" : "people-outline"}

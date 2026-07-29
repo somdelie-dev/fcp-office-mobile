@@ -15,7 +15,7 @@ import { isCurrentlyOnline } from "./offline/networkStatus";
 // }
 
 export function getApiBase() {
-  return "https://firstclassprojects.netlify.app"; // change to your server URL or use env variable
+  return "https://fcp.cautious-tech.com"; // change to your server URL or use env variable
 }
 
 const TOKEN_KEY = "auth_token_v1";
@@ -80,11 +80,12 @@ async function fetchDirect(
 ) {
   const base = getApiBase();
 
-  // Use retry logic for FormData (file uploads) since mobile networks are flaky.
+  // Retry on transient network failures (timeouts, dropped connections) since
+  // mobile networks are flaky. Never retried on 4xx/5xx responses (see below).
   const body = init?.body as any;
   const isFD = isFormDataBody(body);
 
-  const maxAttempts = isFD ? 3 : 1;
+  const maxAttempts = 3;
 
   let attempt = 0;
   let lastError: any = null;
@@ -146,6 +147,7 @@ async function fetchDirect(
         ...init,
         signal: controller.signal,
         headers,
+        cache: "no-store",
       });
 
       const text = await res.text();
@@ -174,17 +176,15 @@ async function fetchDirect(
       return json;
     } catch (e: any) {
       lastError = e;
-      // If aborted (timeout) or a network failure, prepare to retry for FormData uploads
+      // If aborted (timeout) or a network failure, prepare to retry
       const isTimeout =
         e?.name === "AbortError" ||
         String(e?.message).includes("timed out") ||
         String(e?.message).includes("Network request failed");
-      // Do not retry on 4xx client errors (bad auth, forbidden, validation)
+      // Do not retry on 4xx/5xx errors (bad auth, forbidden, validation, server errors) -
+      // those are thrown as plain Error objects from the res.ok check above, not TypeErrors.
       const shouldRetry =
-        isFD &&
-        (isTimeout ||
-          e?.message === "Failed to fetch" ||
-          e instanceof TypeError);
+        isTimeout || e?.message === "Failed to fetch" || e instanceof TypeError;
 
       clearTimeout(t);
 
@@ -221,7 +221,9 @@ function isForemanMutation(path: string, method?: string): boolean {
     "/api/app/foreman/day/ready",
   ];
 
-  return foremanPaths.some((p) => path.startsWith(p));
+  // Match exact path or a sub-path (e.g. "/scan/abc123"), but not a merely
+  // similarly-prefixed sibling endpoint (e.g. "/scan-out-all" must NOT match "/scan").
+  return foremanPaths.some((p) => path === p || path.startsWith(`${p}/`));
 }
 
 /**

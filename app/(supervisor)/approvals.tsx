@@ -275,7 +275,11 @@ export default function ApprovalsScreen() {
 
   return (
     <AuthStyleBackground>
-      <ScrollView style={styles.wrap} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.wrap}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <GlassCard style={styles.topCard}>
           <View style={styles.headerRow}>
             <Text style={[styles.h1, { color: colors.textPrimary }]}>
@@ -512,6 +516,7 @@ export default function ApprovalsScreen() {
               style={styles.detailContent}
               contentContainerStyle={{ paddingBottom: 30 }}
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
               {/* Hero Card */}
               <View
@@ -770,7 +775,7 @@ export default function ApprovalsScreen() {
                       { color: colors.textPrimary },
                     ]}
                   >
-                    Workers
+                    Team
                   </Text>
                   <View
                     style={[

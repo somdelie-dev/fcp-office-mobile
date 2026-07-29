@@ -66,7 +66,11 @@ export function AuthStyleBackground({ children }: Props) {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   container: { flex: 1 },
-  content: { flex: 1, paddingTop: 12 },
+  content: {
+    flex: 1,
+    paddingTop: 12,
+    justifyContent: "center",
+  },
 
   circle: {
     position: "absolute",

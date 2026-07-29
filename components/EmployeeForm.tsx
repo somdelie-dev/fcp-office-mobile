@@ -77,7 +77,7 @@ export default function EmployeeForm() {
           return;
         }
 
-        Alert.alert("Success", "Worker updated");
+        Alert.alert("Success", "Guy updated");
         router.replace({
           pathname: "/(foreman-stack)/workers/[id]",
           params: { id: editId },
@@ -93,7 +93,7 @@ export default function EmployeeForm() {
         });
 
         if (!apiResult?.employee?.id) {
-          Alert.alert("Error", "Failed to create employee");
+          Alert.alert("Error", "Failed to create guy");
           return;
         }
 
@@ -112,7 +112,7 @@ export default function EmployeeForm() {
           return;
         }
 
-        Alert.alert("Success", "Worker created");
+        Alert.alert("Success", "Guy created");
         router.replace({
           pathname: "/(foreman-stack)/workers/[id]",
           params: { id: apiResult.employee.id },
@@ -144,10 +144,10 @@ export default function EmployeeForm() {
               </Pressable>
 
               <Text style={styles.h1}>
-                {isEdit ? "Edit Worker" : "Add Worker"}
+                {isEdit ? "Edit Guy" : "Add Guy"}
               </Text>
 
-              <Label text="Worker Code (QR)" />
+              <Label text="Guy Code (QR)" />
               <TextInput
                 value={code}
                 onChangeText={setCode}

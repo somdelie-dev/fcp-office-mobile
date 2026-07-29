@@ -161,7 +161,7 @@ export default function ForemanScan() {
     try {
       const dres = await apiAttendanceTodayCached(siteId);
       setDay(dres.day);
-      setStatus("Scan employee cards (batch mode)…");
+      setStatus("Scan guy cards (batch mode)…");
     } catch (e: any) {
       setStatus(e?.message ?? "Failed to load today.");
       setDay(null);
@@ -299,7 +299,7 @@ export default function ForemanScan() {
     const code = extractEmployeeCode(payload);
     if (!code) {
       playErr();
-      setStatus("⚠️ Not an employee card QR");
+      setStatus("⚠️ Not a guy card QR");
       return;
     }
 
@@ -479,7 +479,7 @@ export default function ForemanScan() {
               Camera permission needed
             </Text>
             <Text style={[styles.sub, { color: isDark ? "#94a3b8" : "#666" }]}>
-              We use the camera to scan employee QR cards.
+              We use the camera to scan guy QR cards.
             </Text>
 
             <Pressable style={styles.btnPrimary} onPress={requestPermission}>
@@ -519,7 +519,7 @@ export default function ForemanScan() {
             </Text>
             <Text style={[styles.sub, { color: isDark ? "#94a3b8" : "#666" }]}>
               Choose which foreman you are acting for to see their sites and
-              scan workers.
+              scan your team.
             </Text>
 
             <FlatList
@@ -642,7 +642,7 @@ export default function ForemanScan() {
                     ? "Please wait for the current submit to finish."
                     : day?.status && day.status !== "PENDING"
                       ? "Once submitted or approved, scanning is disabled for this day."
-                      : "Choose a site above, then point the camera at an employee QR card."}
+                      : "Choose a site above, then point the camera at a guy QR card."}
                 </Text>
               </View>
             )}
@@ -964,7 +964,7 @@ export default function ForemanScan() {
                     fontWeight: "800",
                   }}
                 >
-                  No items in batch yet. Scan employee cards to add them.
+                  No items in batch yet. Scan guy cards to add them.
                 </Text>
               </View>
             }

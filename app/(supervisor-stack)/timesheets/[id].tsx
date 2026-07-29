@@ -1092,7 +1092,7 @@ export default function SupervisorTimesheetDetail() {
                   color: colors.textPrimary,
                 }}
               >
-                No Employee Data
+                No Team Data
               </Text>
               <Text
                 style={{
@@ -1467,7 +1467,7 @@ export default function SupervisorTimesheetDetail() {
                             fontSize: 12,
                           }}
                         >
-                          ✅ Present = worker scanned that day • ❌ Absent = no
+                          ✅ Present = guy scanned that day • ❌ Absent = no
                           scan
                         </Text>
                       </View>

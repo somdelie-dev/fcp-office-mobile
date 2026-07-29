@@ -13,7 +13,7 @@ export interface AppNotification {
   linkUrl: string | null;
 }
 
-export function useNotifications(pollIntervalMs = 30_000) {
+export function useNotifications(pollIntervalMs = 30 * 60_000) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -83,5 +83,12 @@ export function useNotifications(pollIntervalMs = 30_000) {
     };
   }, [fetch, pollIntervalMs, refresh]);
 
-  return { notifications, unreadCount, loading, refresh, markAllRead, markRead };
+  return {
+    notifications,
+    unreadCount,
+    loading,
+    refresh,
+    markAllRead,
+    markRead,
+  };
 }

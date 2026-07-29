@@ -1507,10 +1507,13 @@ export async function apiSupervisorAllForemen(): Promise<{
 export async function apiSupervisorSites(query?: {
   q?: string;
   show?: "active" | "all";
+  /** When set, only sites with at least one attendance scan on this work date are returned. */
+  dateISO?: string;
 }): Promise<{ ok: true; sites: SupervisorSiteListItemDto[] }> {
   const params = new URLSearchParams();
   if (query?.q) params.set("q", query.q);
   if (query?.show) params.set("show", query.show);
+  if (query?.dateISO) params.set("dateISO", query.dateISO);
   const qs = params.toString();
   return apiFetch(`/api/app/supervisor/sites${qs ? `?${qs}` : ""}`);
 }

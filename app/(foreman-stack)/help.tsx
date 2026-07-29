@@ -35,9 +35,9 @@ type FAQItem = {
 
 const faqs: FAQItem[] = [
   {
-    question: "How do I scan worker attendance?",
+    question: "How do I scan a guy's attendance?",
     answer:
-      "Navigate to the Scan tab and select your site. Point the camera at the worker's QR code. The scan will be recorded automatically. You can submit the batch when ready.",
+      "Navigate to the Scan tab and select your site. Point the camera at the guy's QR code. The scan will be recorded automatically. You can submit the batch when ready.",
   },
   {
     question: "How do I take site day photos?",
@@ -60,9 +60,9 @@ const faqs: FAQItem[] = [
       "Password changes must be done through the web portal or by contacting your supervisor. For security reasons, this cannot be done in the mobile app.",
   },
   {
-    question: "Why can't I see some workers?",
+    question: "Why can't I see some of my team?",
     answer:
-      "You can only see workers assigned to your sites. If a worker is missing, contact your supervisor to ensure they are correctly assigned.",
+      "You can only see team members assigned to your sites. If a guy is missing, contact your supervisor to ensure they are correctly assigned.",
   },
   {
     question: "What does the verification status mean?",

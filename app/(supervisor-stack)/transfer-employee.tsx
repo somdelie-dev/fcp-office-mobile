@@ -100,6 +100,12 @@ export default function TransferEmployeeScreen() {
 
   // Source site data
   const [sites, setSites] = useState<SupervisorSiteListItemDto[]>([]);
+  // Subset of `sites` that have at least one attendance scan on the selected
+  // work date — used only for the Source Site row. Destination pickers and
+  // name lookups below intentionally keep using the full `sites` list.
+  const [sitesWithScans, setSitesWithScans] = useState<
+    SupervisorSiteListItemDto[]
+  >([]);
   const [selectedSiteId, setSelectedSiteId] = useState<string>(
     paramSiteId ?? "",
   );
@@ -155,19 +161,35 @@ export default function TransferEmployeeScreen() {
   );
   const [loadingForemen, setLoadingForemen] = useState(false);
 
-  // Load supervisor's sites (always sort by job number DESC)
+  // Load supervisor's sites (always sort by job number DESC), plus a second,
+  // separate fetch scoped to the selected work date — the backend only
+  // returns sites that have at least one attendance scan on that date, used
+  // for the Source Site row.
   const loadSites = useCallback(async () => {
     try {
-      const res = await apiSupervisorSites({ show: "active" });
-      const list = Array.isArray(res.sites) ? res.sites : [];
+      const [allRes, scannedRes] = await Promise.all([
+        apiSupervisorSites({ show: "active" }),
+        apiSupervisorSites({ show: "active", dateISO }),
+      ]);
 
+      const list = Array.isArray(allRes.sites) ? allRes.sites : [];
       const sorted = [...list].sort(
         (a, b) =>
           jobNumberToNumber((b as any).code) -
           jobNumberToNumber((a as any).code),
       );
-
       setSites(sorted);
+
+      const scannedList = Array.isArray(scannedRes.sites)
+        ? scannedRes.sites
+        : [];
+      setSitesWithScans(
+        [...scannedList].sort(
+          (a, b) =>
+            jobNumberToNumber((b as any).code) -
+            jobNumberToNumber((a as any).code),
+        ),
+      );
 
       if (!selectedSiteId && sorted.length > 0) {
         setSelectedSiteId(sorted[0].id);
@@ -175,7 +197,7 @@ export default function TransferEmployeeScreen() {
     } catch (e: any) {
       setError(e?.message ?? "Failed to load sites");
     }
-  }, [selectedSiteId]);
+  }, [selectedSiteId, dateISO]);
 
   // Load scans for the selected site
   const loadScans = useCallback(async () => {
@@ -213,8 +235,9 @@ export default function TransferEmployeeScreen() {
     }, [refresh]),
   );
 
-  // Refetch only the scans when the selected site or date changes
-  // (avoid reloading the full screen / re-fetching sites list).
+  // Refetch scans (and each site's scan count for the date, so the Source
+  // Site list can filter to sites with attendance) when the site or date
+  // changes — avoids reloading the full screen.
   React.useEffect(() => {
     if (!selectedSiteId) return;
     if (loading) return; // don’t interfere with the initial "load" refresh
@@ -225,7 +248,7 @@ export default function TransferEmployeeScreen() {
       try {
         setRefreshing(true);
         setError(null);
-        await loadScans();
+        await Promise.all([loadScans(), loadSites()]);
       } catch (e: any) {
         if (!alive) return;
         setError(e?.message ?? "Failed to load scans");
@@ -238,7 +261,7 @@ export default function TransferEmployeeScreen() {
     return () => {
       alive = false;
     };
-  }, [selectedSiteId, dateISO, loadScans, loading]);
+  }, [selectedSiteId, dateISO, loadScans, loadSites, loading]);
 
   // Filter scans: show only scanned-in employees (not yet scanned out)
   const transferableScans = useMemo(
@@ -254,13 +277,14 @@ export default function TransferEmployeeScreen() {
     return filtered.filter((s) => s.name.toLowerCase().includes(q));
   }, [sites, selectedSiteId, siteSearch]);
 
-  // Source site search (main screen)
+  // Source site search (main screen) — only list sites that have attendance
+  // scans on the selected work date, so there's nothing to move/delete for
+  // sites shown here. Destination pickers (below) intentionally show all sites.
   const sourceSites = useMemo(() => {
-    const filtered = sites;
     const q = sourceSiteSearch.trim().toLowerCase();
-    if (!q) return filtered;
-    return filtered.filter((s) => s.name.toLowerCase().includes(q));
-  }, [sites, sourceSiteSearch]);
+    if (!q) return sitesWithScans;
+    return sitesWithScans.filter((s) => s.name.toLowerCase().includes(q));
+  }, [sitesWithScans, sourceSiteSearch]);
 
   const employeeSearchNorm = useMemo(
     () => employeeSearch.trim().toLowerCase(),
@@ -422,6 +446,7 @@ export default function TransferEmployeeScreen() {
     <AuthStyleBackground>
       <ScrollView
         contentContainerStyle={styles.wrap}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -569,7 +594,7 @@ export default function TransferEmployeeScreen() {
             <TextInput
               value={employeeSearch}
               onChangeText={setEmployeeSearch}
-              placeholder="Search employees..."
+              placeholder="Search team..."
               placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
               style={[styles.searchInput, { color: colors.textPrimary }]}
               autoCapitalize="none"
@@ -594,7 +619,7 @@ export default function TransferEmployeeScreen() {
               />
               <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                 {employeeSearch.trim()
-                  ? "No employees match your search."
+                  ? "No team members match your search."
                   : "No one currently scanned in at this site."}
               </Text>
             </View>
@@ -665,13 +690,10 @@ export default function TransferEmployeeScreen() {
                   key={scan.id}
                   style={[
                     styles.employeeRow,
-                    {
-                      borderBottomColor: colors.border,
-                      opacity: 0.6,
-                    },
+                    { borderBottomColor: colors.border },
                   ]}
                 >
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, opacity: 0.6 }}>
                     <Text
                       style={[
                         styles.employeeName,
@@ -696,6 +718,13 @@ export default function TransferEmployeeScreen() {
                     <View style={styles.outBadge}>
                       <Text style={styles.outBadgeText}>OUT</Text>
                     </View>
+                    <TouchableOpacity
+                      style={styles.transferBtn}
+                      onPress={() => openTransferModal(scan)}
+                    >
+                      <Ionicons name="swap-horizontal" size={18} color="#fff" />
+                      <Text style={styles.transferBtnText}>Move</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.deleteBtn}
                       disabled={deletingScanId === scan.id}
@@ -729,6 +758,9 @@ export default function TransferEmployeeScreen() {
               width: "92%",
               maxWidth: 400,
               maxHeight: "80%",
+              backgroundColor: isDark
+                ? "rgba(15,23,42,0.97)"
+                : "rgba(255,255,255,0.97)",
             }}
           >
             <Text style={[styles.h1, { color: colors.textPrimary }]}>
@@ -779,8 +811,8 @@ export default function TransferEmployeeScreen() {
                 {
                   borderColor: colors.border,
                   backgroundColor: isDark
-                    ? "rgba(255,255,255,0.08)"
-                    : "rgba(0,0,0,0.04)",
+                    ? "rgba(30,41,59,0.9)"
+                    : "rgba(241,245,249,0.95)",
                 },
               ]}
               onPress={() => setSitePickerOpen(true)}
@@ -862,8 +894,8 @@ export default function TransferEmployeeScreen() {
                       {
                         borderColor: colors.border,
                         backgroundColor: isDark
-                          ? "rgba(255,255,255,0.08)"
-                          : "rgba(0,0,0,0.04)",
+                          ? "rgba(30,41,59,0.9)"
+                          : "rgba(241,245,249,0.95)",
                         marginTop: 6,
                       },
                     ]}
@@ -909,8 +941,8 @@ export default function TransferEmployeeScreen() {
                   color: colors.textPrimary,
                   borderColor: colors.border,
                   backgroundColor: isDark
-                    ? "rgba(255,255,255,0.08)"
-                    : "rgba(0,0,0,0.04)",
+                    ? "rgba(30,41,59,0.9)"
+                    : "rgba(241,245,249,0.95)",
                 },
               ]}
               multiline
@@ -969,6 +1001,9 @@ export default function TransferEmployeeScreen() {
                 width: "92%",
                 maxWidth: 400,
                 maxHeight: "70%",
+                backgroundColor: isDark
+                  ? "rgba(15,23,42,0.97)"
+                  : "rgba(255,255,255,0.97)",
               }}
             >
               <Text style={[styles.h1, { color: colors.textPrimary }]}>
@@ -980,7 +1015,9 @@ export default function TransferEmployeeScreen() {
                   styles.searchBox,
                   {
                     borderColor: colors.border,
-                    backgroundColor: colors.inputBg,
+                    backgroundColor: isDark
+                      ? "rgba(30,41,59,0.9)"
+                      : "rgba(241,245,249,0.95)",
                   },
                 ]}
               >
@@ -1009,13 +1046,14 @@ export default function TransferEmployeeScreen() {
                     <TouchableOpacity
                       style={[
                         styles.siteOption,
-                        isSelected && {
-                          backgroundColor: isDark
-                            ? "rgba(59,130,246,0.2)"
-                            : "rgba(59,130,246,0.1)",
-                          borderColor: "#3b82f6",
-                        },
                         {
+                          backgroundColor: isSelected
+                            ? isDark
+                              ? "rgba(59,130,246,0.2)"
+                              : "rgba(59,130,246,0.1)"
+                            : isDark
+                              ? "rgba(30,41,59,0.9)"
+                              : "rgba(241,245,249,0.95)",
                           borderColor: isSelected ? "#3b82f6" : colors.border,
                         },
                       ]}
@@ -1091,6 +1129,9 @@ export default function TransferEmployeeScreen() {
                 width: "92%",
                 maxWidth: 400,
                 maxHeight: "60%",
+                backgroundColor: isDark
+                  ? "rgba(15,23,42,0.97)"
+                  : "rgba(255,255,255,0.97)",
               }}
             >
               <Text style={[styles.h1, { color: colors.textPrimary }]}>
@@ -1107,13 +1148,14 @@ export default function TransferEmployeeScreen() {
                     <TouchableOpacity
                       style={[
                         styles.siteOption,
-                        isSelected && {
-                          backgroundColor: isDark
-                            ? "rgba(59,130,246,0.2)"
-                            : "rgba(59,130,246,0.1)",
-                          borderColor: "#3b82f6",
-                        },
                         {
+                          backgroundColor: isSelected
+                            ? isDark
+                              ? "rgba(59,130,246,0.2)"
+                              : "rgba(59,130,246,0.1)"
+                            : isDark
+                              ? "rgba(30,41,59,0.9)"
+                              : "rgba(241,245,249,0.95)",
                           borderColor: isSelected ? "#3b82f6" : colors.border,
                         },
                       ]}

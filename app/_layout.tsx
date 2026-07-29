@@ -3,9 +3,10 @@ import React, { useEffect } from "react";
 import { Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { OfflineBanner } from "../components/OfflineStatus";
 import { AuthProvider, useAuth } from "../lib/auth";
 import { DataCacheProvider } from "../lib/dataCache";
-import { OfflineBanner } from "../lib/networkMonitor";
+import { NetworkStatusListener } from "../lib/networkMonitor";
 import { setupNotificationListeners } from "../lib/push";
 import { ThemeProvider } from "../lib/themeContext";
 
@@ -93,6 +94,7 @@ export default function RootLayout() {
         <AuthProvider>
           <DataCacheProvider>
             <NotificationNavigator />
+            <NetworkStatusListener />
             {showOfflineBanner ? <OfflineBanner /> : null}
 
             <Stack
