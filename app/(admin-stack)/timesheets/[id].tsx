@@ -423,9 +423,20 @@ export default function AdminTimesheetDetail() {
   const canReject = status === "SUBMITTED";
   const canPaid = status === "APPROVED";
 
+  // Fallback for older payloads that don't yet include a per-row isForeman
+  // flag: match by employeeId against the foreman's resolved employee record.
   const foremanKey = useMemo(
     () => normName(data?.foremanName),
     [data?.foremanName],
+  );
+  const rowIsForeman = useCallback(
+    (r: { employeeId: string; fullName: string; isForeman?: boolean }) =>
+      typeof r.isForeman === "boolean"
+        ? r.isForeman
+        : data?.foreman?.employeeId
+          ? r.employeeId === data.foreman.employeeId
+          : !!foremanKey && normName(r.fullName) === foremanKey,
+    [data?.foreman?.employeeId, foremanKey],
   );
 
   const totals = useMemo(() => {
@@ -437,8 +448,7 @@ export default function AdminTimesheetDetail() {
     let teamPay = 0;
 
     for (const r of rows) {
-      const isForeman = foremanKey && normName(r.fullName) === foremanKey;
-      if (isForeman) {
+      if (rowIsForeman(r)) {
         foremanDays += Number(r.daysWorked ?? 0) || 0;
         foremanPay += Number(r.pay ?? 0) || 0;
       } else {
@@ -455,7 +465,7 @@ export default function AdminTimesheetDetail() {
       totalDays: foremanDays + teamDays,
       totalPay: foremanPay + teamPay,
     };
-  }, [data, foremanKey]);
+  }, [data, rowIsForeman]);
 
   const approve = useCallback(() => {
     if (!adminTimesheetId) return;
@@ -887,20 +897,13 @@ export default function AdminTimesheetDetail() {
                 <ScrollView showsVerticalScrollIndicator={false}>
                   {(() => {
                     const sorted = [...data.rows].sort((a, b) => {
-                      const aIsForeman =
-                        foremanKey && normName(a.fullName) === foremanKey
-                          ? 0
-                          : 1;
-                      const bIsForeman =
-                        foremanKey && normName(b.fullName) === foremanKey
-                          ? 0
-                          : 1;
+                      const aIsForeman = rowIsForeman(a) ? 0 : 1;
+                      const bIsForeman = rowIsForeman(b) ? 0 : 1;
                       return aIsForeman - bIsForeman;
                     });
 
                     return sorted.map((r) => {
-                      const isForeman =
-                        !!foremanKey && normName(r.fullName) === foremanKey;
+                      const isForeman = rowIsForeman(r);
 
                       return (
                         <View
@@ -917,7 +920,7 @@ export default function AdminTimesheetDetail() {
                             w={W_NAME}
                             text={
                               isForeman
-                                ? `ðŸ‘¨â€ðŸ’¼ ${r.fullName}`
+                                ? `👨‍💼 ${r.fullName}`
                                 : r.fullName
                             }
                             bold={isForeman}
@@ -1146,7 +1149,7 @@ export default function AdminTimesheetDetail() {
                         fontSize: 12,
                       }}
                     >
-                      âœ… Present = guy scanned that day â€¢ âŒ Absent = no
+                      ✅ Present = guy scanned that day • ❌ Absent = no
                       scan
                     </Text>
                   </View>

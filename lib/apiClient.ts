@@ -370,8 +370,11 @@ export type AdminAttendanceScanDto = {
   supervisorName: string | null;
   workDateISO: string;
   scannedAtISO: string;
+  scannedOutAtISO: string | null;
   scanType: string;
   overtimeType: string | null;
+  scanOutMethod: "PHOTO" | "FINGERPRINT" | "FACE" | null;
+  verificationStatus: "VERIFIED" | "PENDING_REVIEW" | "REJECTED" | null;
   latitude: number | null;
   longitude: number | null;
   address: string | null;
@@ -396,6 +399,52 @@ export async function apiAdminAttendanceScans(query?: {
   if (query?.date) params.set("date", query.date);
   const qs = params.toString();
   return apiFetch(`/api/app/admin/attendance-scans${qs ? `?${qs}` : ""}`);
+}
+
+// ADMIN: MANUAL ATTENDANCE SCANS
+
+/** Get employee IDs that already have an attendance scan for a given date */
+export async function apiAdminManualScanScannedIds(
+  date: string,
+): Promise<{ scannedEmployeeIds: string[] }> {
+  return apiFetch(
+    `/api/admin/attendance-scans/manual?date=${encodeURIComponent(date)}`,
+  );
+}
+
+export type AdminManualScanResultDto = {
+  id: string;
+  scannedAt: string;
+  employee: { id: string; fullName: string };
+  site: string;
+  foreman: string;
+  workDate: string;
+};
+
+export type AdminManualScanSkippedDto = {
+  employeeId: string;
+  employeeName: string;
+  workDate: string;
+  reason: string;
+};
+
+/** Create manual attendance scans for one or more employees across one or more dates */
+export async function apiAdminCreateManualScans(input: {
+  siteId: string;
+  foremanId: string;
+  employeeIds: string[];
+  workDates: string[];
+  reason?: string;
+}): Promise<{
+  ok: true;
+  scan: AdminManualScanResultDto;
+  scans: AdminManualScanResultDto[];
+  skipped: AdminManualScanSkippedDto[];
+}> {
+  return apiFetch("/api/admin/attendance-scans/manual", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 // ADMIN: SITE ASSIGNMENTS
@@ -749,7 +798,7 @@ export type TimesheetDetailDto = {
   foremanName?: string;
   foremanCode?: string;
 
-  foreman?: { id: string; name: string };
+  foreman?: { id: string; name: string; employeeId?: string | null };
   supervisor?: { id: string; name: string };
 
   sites?: Array<{ id: string; code?: string | null; name: string }>;
@@ -768,6 +817,8 @@ export type TimesheetDetailDto = {
     present: boolean[];
     daysWorked: number;
     pay: number;
+    /** Computed server-side via employeeId match; prefer this over name matching. */
+    isForeman?: boolean;
   }[];
 
   totals?: { totalDays: number; totalPay: number };
@@ -954,6 +1005,8 @@ export async function apiSupervisorScan(input: {
   employeeCode: string;
   workDateISO: string; // YYYY-MM-DD (UTC)
   location?: LocationPayload | null;
+  supervisorAuthConfirmed?: boolean;
+  supervisorAuthDevice?: string;
 }) {
   return apiFetch(
     `/api/app/supervisor/sites/${encodeURIComponent(input.siteId)}/scan`,
@@ -966,6 +1019,8 @@ export async function apiSupervisorScan(input: {
         latitude: input.location?.latitude ?? null,
         longitude: input.location?.longitude ?? null,
         address: input.location?.address ?? null,
+        supervisorAuthConfirmed: input.supervisorAuthConfirmed,
+        supervisorAuthDevice: input.supervisorAuthDevice,
       }),
     },
   );
@@ -980,6 +1035,8 @@ export async function apiSupervisorScanBulk(input: {
   workDateISO: string; // YYYY-MM-DD (UTC)
   employeeCodes: string[]; // employee qr payloads/codes
   location?: LocationPayload | null;
+  supervisorAuthConfirmed?: boolean;
+  supervisorAuthDevice?: string;
 }) {
   return apiFetch(
     `/api/app/supervisor/sites/${encodeURIComponent(input.siteId)}/scan-bulk`,
@@ -992,6 +1049,8 @@ export async function apiSupervisorScanBulk(input: {
         latitude: input.location?.latitude ?? null,
         longitude: input.location?.longitude ?? null,
         address: input.location?.address ?? null,
+        supervisorAuthConfirmed: input.supervisorAuthConfirmed,
+        supervisorAuthDevice: input.supervisorAuthDevice,
       }),
     },
   );
@@ -1473,6 +1532,7 @@ export type SupervisorSiteDetailDto = {
     code?: string | null;
     location?: string | null;
     isActive: boolean;
+    manualAttendanceRequiresSupervisorFingerprint?: boolean;
   };
   assignedForemen: Array<{
     foremanId: string; // Foreman.id
@@ -2304,4 +2364,87 @@ export async function apiAdminPlantAssignments(query?: {
   if (query?.status) params.set("status", query.status);
   const qs = params.toString();
   return apiFetch(`/api/app/admin/plant-assignments${qs ? `?${qs}` : ""}`);
+}
+
+// ─── FACE SCAN-OUT ──────────────────────────────────────────────────────────
+//
+// Phase 2: `image` (base64 JPEG) is optional so this endpoint still works
+// exactly like Phase 1 (cosmetic-only) if omitted. When present and the
+// employee has approved reference enrollments, the server runs a real
+// face-service comparison. `checkLiveness` requests the Phase 3 first-cut
+// head-turn heuristic (see FACE_VERIFICATION_TECHNICAL_DESIGN.md §9).
+
+export async function apiScanOutFace(input: {
+  employeeId: string;
+  device: string;
+  image?: string;
+  checkLiveness?: boolean;
+}): Promise<{
+  ok: true;
+  scannedOutAt: string;
+  verificationStatus: string;
+  confidence: number | null;
+}> {
+  return apiFetch("/api/app/attendance/scan-out-face", {
+    method: "POST",
+    body: JSON.stringify({
+      employeeId: input.employeeId,
+      device: input.device,
+      image: input.image,
+      checkLiveness: input.checkLiveness,
+    }),
+    headers: { "content-type": "application/json" },
+    auth: true,
+  });
+}
+
+// ─── FACE ENROLLMENT ────────────────────────────────────────────────────────
+//
+// Mirrors apiForemanUploadEmployeePhoto's multipart convention. Up to 5
+// photos, each tagged with a pose (FRONT/LEFT/RIGHT/SMILE/NEUTRAL, same
+// order as photos). Enrollments land as PENDING_APPROVAL — an admin must
+// approve before they're used for matching (see FaceEnrollment in schema).
+
+export type FaceEnrollmentPose = "FRONT" | "LEFT" | "RIGHT" | "SMILE" | "NEUTRAL";
+
+export async function apiCreateFaceEnrollments(
+  employeeId: string,
+  photos: { uri: string; name: string; type: string; pose: FaceEnrollmentPose }[],
+  meta?: { device?: string; latitude?: number; longitude?: number },
+): Promise<{
+  results: (
+    | { id: string; pose: string; qualityScore: number | null }
+    | { pose: string; error: string }
+  )[];
+}> {
+  const fd = new FormData();
+  for (const photo of photos) {
+    fd.append("photos", { uri: photo.uri, name: photo.name, type: photo.type } as any);
+  }
+  fd.append("poses", JSON.stringify(photos.map((p) => p.pose)));
+  if (meta?.device) fd.append("device", meta.device);
+  if (meta?.latitude !== undefined) fd.append("latitude", String(meta.latitude));
+  if (meta?.longitude !== undefined) fd.append("longitude", String(meta.longitude));
+
+  return apiFetch(
+    `/api/app/foreman/employees/${encodeURIComponent(employeeId)}/face-enrollments`,
+    { method: "POST", body: fd as any, auth: true },
+  );
+}
+
+export async function apiListFaceEnrollments(employeeId: string): Promise<{
+  enrollments: {
+    id: string;
+    pose: string;
+    imageUrl: string;
+    qualityScore: number | null;
+    status: "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+    rejectedReason: string | null;
+    createdAt: string;
+  }[];
+}> {
+  return apiFetch(
+    `/api/app/foreman/employees/${encodeURIComponent(employeeId)}/face-enrollments`,
+    { auth: true },
+  );
 }

@@ -15,7 +15,8 @@ import { isCurrentlyOnline } from "./offline/networkStatus";
 // }
 
 export function getApiBase() {
-  return "https://fcp.cautious-tech.com"; // change to your server URL or use env variable
+  return "http://192.168.0.154:3000"; // change to your server URL or use env variable
+  // return "https://fcp.cautious-tech.com"; // change to your server URL or use env variable
 }
 
 const TOKEN_KEY = "auth_token_v1";

@@ -14,6 +14,7 @@ import {
   Alert,
   FlatList,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,6 +24,7 @@ import {
   View,
 } from "react-native";
 import { setAudioModeAsync, useAudioPlayer } from "expo-audio";
+import * as LocalAuthentication from "expo-local-authentication";
 
 import { AuthStyleBackground } from "@/components/AuthStyleBackground";
 import { GlassCard } from "@/components/GlassCard";
@@ -149,6 +151,7 @@ export default function SupervisorScanScreen() {
   const [selectedForemanId, setSelectedForemanId] = useState<string | null>(
     null,
   );
+  const [requiresSupervisorAuth, setRequiresSupervisorAuth] = useState(false);
 
   const [searchForemen, setSearchForemen] = useState("");
 
@@ -233,10 +236,14 @@ export default function SupervisorScanScreen() {
   const loadForemenForSite = useCallback(async (siteId: string) => {
     setForemenLoading(true);
     setError(null);
+    setRequiresSupervisorAuth(false);
     try {
       const detail = (await apiSupervisorSiteDetail(
         siteId,
       )) as SupervisorSiteDetailDto;
+      setRequiresSupervisorAuth(
+        Boolean(detail.site?.manualAttendanceRequiresSupervisorFingerprint),
+      );
       const assigned = detail.assignedForemen ?? [];
 
       const mapped: ForemanOption[] = assigned
@@ -469,6 +476,33 @@ export default function SupervisorScanScreen() {
       return;
     }
 
+    let supervisorAuthConfirmed = false;
+    if (requiresSupervisorAuth) {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = hasHardware
+        ? await LocalAuthentication.isEnrolledAsync()
+        : false;
+      if (!hasHardware || !isEnrolled) {
+        Alert.alert(
+          "Fingerprint required",
+          "This site requires supervisor fingerprint verification before manual attendance can be recorded, but this device has no fingerprint/Face ID enrolled. Use a device with biometrics set up.",
+        );
+        return;
+      }
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: "Verify to record manual attendance",
+        disableDeviceFallback: false,
+      });
+      if (!result.success) {
+        Alert.alert(
+          "Verification failed",
+          "Supervisor fingerprint verification was not completed. Manual attendance was not recorded.",
+        );
+        return;
+      }
+      supervisorAuthConfirmed = true;
+    }
+
     setBusySubmit(true);
     setError(null);
     try {
@@ -486,6 +520,10 @@ export default function SupervisorScanScreen() {
           workDateISO,
           employeeCodes: batch,
           location,
+          supervisorAuthConfirmed,
+          supervisorAuthDevice: supervisorAuthConfirmed
+            ? `${Platform.OS} ${Platform.Version}`
+            : undefined,
         });
 
         const results = res?.results ?? [];
@@ -524,6 +562,7 @@ export default function SupervisorScanScreen() {
     loadSiteDay,
     selectedForemanId,
     selectedSite?.id,
+    requiresSupervisorAuth,
   ]);
 
   const canScan =
@@ -578,6 +617,12 @@ export default function SupervisorScanScreen() {
             </Pressable>
             <Text style={[styles.h1, { color: colors.textPrimary }]}>Scan</Text>
           </View>
+
+          {requiresSupervisorAuth ? (
+            <Text style={{ color: colors.error, fontWeight: "800", fontSize: 12 }}>
+              🔒 This site requires your fingerprint before submitting manual attendance.
+            </Text>
+          ) : null}
 
           <View style={styles.dateHeader}>
             <Text style={[styles.selectorLabel, { color: colors.textSecondary }]}>

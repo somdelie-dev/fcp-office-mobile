@@ -60,6 +60,66 @@ function formatDate(iso: string) {
   });
 }
 
+function getScanOutMethodLabel(
+  method: AdminAttendanceScanDto["scanOutMethod"],
+): string | null {
+  switch (method) {
+    case "FINGERPRINT":
+      return "Fingerprint";
+    case "FACE":
+      return "Face";
+    case "PHOTO":
+      return "Photo";
+    default:
+      return null;
+  }
+}
+
+function getScanOutMethodIcon(
+  method: AdminAttendanceScanDto["scanOutMethod"],
+): keyof typeof Ionicons.glyphMap {
+  switch (method) {
+    case "FINGERPRINT":
+      return "finger-print";
+    case "FACE":
+      return "scan";
+    case "PHOTO":
+      return "camera";
+    default:
+      return "log-out";
+  }
+}
+
+function getVerificationLabel(
+  status: AdminAttendanceScanDto["verificationStatus"],
+): string | null {
+  switch (status) {
+    case "VERIFIED":
+      return "Verified";
+    case "PENDING_REVIEW":
+      return "Pending Review";
+    case "REJECTED":
+      return "Rejected";
+    default:
+      return null;
+  }
+}
+
+function getVerificationColor(
+  status: AdminAttendanceScanDto["verificationStatus"],
+): string | undefined {
+  switch (status) {
+    case "VERIFIED":
+      return "#22c55e";
+    case "PENDING_REVIEW":
+      return "#f59e0b";
+    case "REJECTED":
+      return "#ef4444";
+    default:
+      return undefined;
+  }
+}
+
 function ScanDetailModal({
   scan,
   photoUrl,
@@ -235,6 +295,39 @@ function ScanDetailModal({
                   icon="location"
                   label="Location"
                   value={scan.address}
+                  colors={colors}
+                />
+              )}
+              {scan.scannedOutAtISO ? (
+                <>
+                  <InfoRow
+                    icon="log-out"
+                    label="Scanned Out"
+                    value={new Date(scan.scannedOutAtISO).toLocaleTimeString(
+                      "en-US",
+                      { hour: "2-digit", minute: "2-digit", hour12: true },
+                    )}
+                    colors={colors}
+                  />
+                  <InfoRow
+                    icon={getScanOutMethodIcon(scan.scanOutMethod)}
+                    label="Scan Out Method"
+                    value={getScanOutMethodLabel(scan.scanOutMethod) ?? "—"}
+                    colors={colors}
+                  />
+                  <InfoRow
+                    icon="shield-checkmark"
+                    label="Verification"
+                    value={getVerificationLabel(scan.verificationStatus) ?? "—"}
+                    colors={colors}
+                    valueColor={getVerificationColor(scan.verificationStatus)}
+                  />
+                </>
+              ) : (
+                <InfoRow
+                  icon="log-out-outline"
+                  label="Scan Out"
+                  value="Not scanned out"
                   colors={colors}
                 />
               )}
@@ -423,6 +516,34 @@ function ScanRow({
             </View>
           )}
         </View>
+        {item.scannedOutAtISO ? (
+          <View
+            style={[
+              styles.scanOutBadge,
+              {
+                borderColor:
+                  getVerificationColor(item.verificationStatus) ?? "#94a3b8",
+              },
+            ]}
+          >
+            <Ionicons
+              name={getScanOutMethodIcon(item.scanOutMethod)}
+              size={9}
+              color={getVerificationColor(item.verificationStatus) ?? "#94a3b8"}
+            />
+            <Text
+              style={[
+                styles.scanOutBadgeText,
+                {
+                  color:
+                    getVerificationColor(item.verificationStatus) ?? "#94a3b8",
+                },
+              ]}
+            >
+              {getScanOutMethodLabel(item.scanOutMethod) ?? "Out"}
+            </Text>
+          </View>
+        ) : null}
         {hasLocation ? (
           <Pressable onPress={openMap} style={styles.locationRow}>
             <Ionicons name="location" size={10} color="#3b82f6" />
@@ -795,6 +916,19 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 9,
     fontWeight: "800",
+  },
+  scanOutBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    gap: 3,
+  },
+  scanOutBadgeText: {
+    fontSize: 9,
+    fontWeight: "700",
   },
   locationRow: {
     flexDirection: "row",

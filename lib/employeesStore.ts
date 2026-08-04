@@ -1,6 +1,7 @@
 // lib/employeesStore.ts
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { apiForemanEmployee, type EmployeeDto } from "./apiClient";
+import { Platform } from "react-native";
+import { apiForemanEmployee, apiScanOutFace, type EmployeeDto } from "./apiClient";
 
 export type Employee = {
   id: string;
@@ -9,7 +10,7 @@ export type Employee = {
   phone?: string; // not returned by your backend right now
   dayRate: number;
   active: boolean;
-  faceImageUrl?: string | null; // list returns it; single currently not
+  faceImageUrl?: string | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -154,6 +155,32 @@ export async function fetchEmployeeFromServer(
     console.error(`Failed to fetch employee ${employeeId}:`, error);
     return null;
   }
+}
+
+/**
+ * ✅ Records a face scan-out via the attendance endpoint and returns the
+ * server-issued timestamp. `image` (base64) is optional — Phase 2 real
+ * verification only runs when it's provided; omitting it falls back to the
+ * original Phase 1 cosmetic-only behavior.
+ */
+export async function recordFaceScanOut(
+  id: string,
+  options?: { image?: string; checkLiveness?: boolean },
+): Promise<{ timestamp: string; verificationStatus: string; confidence: number | null }> {
+  await ensureLoaded();
+
+  const res = await apiScanOutFace({
+    employeeId: id,
+    device: `${Platform.OS} ${Platform.Version}`,
+    image: options?.image,
+    checkLiveness: options?.checkLiveness,
+  });
+
+  return {
+    timestamp: res.scannedOutAt,
+    verificationStatus: res.verificationStatus,
+    confidence: res.confidence,
+  };
 }
 
 /**

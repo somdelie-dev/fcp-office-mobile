@@ -13,6 +13,7 @@ import {
   Shield,
   UserCheck,
   UserCog,
+  UserPlus,
   Users,
   Zap,
 } from "lucide-react-native";
@@ -361,6 +362,40 @@ export default function AdminHomeScreen() {
                 </Text>
                 <Text style={[styles.quickActionSub, { color: textSub }]}>
                   View scan activity
+                </Text>
+              </View>
+              <ChevronRight size={18} color={textSub} />
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.quickActionBtn,
+                {
+                  backgroundColor: pressed
+                    ? isDark
+                      ? "rgba(249,115,22,0.25)"
+                      : "rgba(249,115,22,0.12)"
+                    : isDark
+                      ? "rgba(249,115,22,0.15)"
+                      : "rgba(249,115,22,0.08)",
+                },
+              ]}
+              onPress={() => router.push("/(admin-stack)/manual-scan" as any)}
+            >
+              <View
+                style={[
+                  styles.quickActionIcon,
+                  { backgroundColor: "rgba(249,115,22,0.2)" },
+                ]}
+              >
+                <UserPlus size={20} color="#f97316" strokeWidth={2.2} />
+              </View>
+              <View style={styles.quickActionText}>
+                <Text style={[styles.quickActionTitle, { color: textMain }]}>
+                  Manual Scan
+                </Text>
+                <Text style={[styles.quickActionSub, { color: textSub }]}>
+                  Scan for a forgetful foreman
                 </Text>
               </View>
               <ChevronRight size={18} color={textSub} />

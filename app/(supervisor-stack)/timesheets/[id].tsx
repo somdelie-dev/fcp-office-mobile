@@ -497,9 +497,20 @@ export default function SupervisorTimesheetDetail() {
   const isRejecting = busyAction === "reject";
   const isMarkingPaid = busyAction === "paid";
 
+  // Fallback for older payloads that don't yet include a per-row isForeman
+  // flag: match by employeeId against the foreman's resolved employee record.
   const foremanKey = useMemo(
     () => normName(data?.foremanName),
     [data?.foremanName],
+  );
+  const rowIsForeman = useCallback(
+    (r: { employeeId: string; fullName: string; isForeman?: boolean }) =>
+      typeof r.isForeman === "boolean"
+        ? r.isForeman
+        : data?.foreman?.employeeId
+          ? r.employeeId === data.foreman.employeeId
+          : !!foremanKey && normName(r.fullName) === foremanKey,
+    [data?.foreman?.employeeId, foremanKey],
   );
 
   // Pre-compute day acceptance statuses to avoid lint false positives in JSX
@@ -536,8 +547,7 @@ export default function SupervisorTimesheetDetail() {
     let teamPay = 0;
 
     for (const r of rows) {
-      const isForeman = foremanKey && normName(r.fullName) === foremanKey;
-      if (isForeman) {
+      if (rowIsForeman(r)) {
         foremanDays += Number(r.daysWorked ?? 0) || 0;
         foremanPay += Number(r.pay ?? 0) || 0;
       } else {
@@ -554,7 +564,7 @@ export default function SupervisorTimesheetDetail() {
       totalDays: foremanDays + teamDays,
       totalPay: foremanPay + teamPay,
     };
-  }, [data, foremanKey]);
+  }, [data, rowIsForeman]);
 
   // Accept today's work - actual API call
   const doAcceptToday = useCallback(async () => {
@@ -1266,20 +1276,13 @@ export default function SupervisorTimesheetDetail() {
                     <ScrollView showsVerticalScrollIndicator={false}>
                       {(() => {
                         const sorted = [...data.rows].sort((a, b) => {
-                          const aIsForeman =
-                            foremanKey && normName(a.fullName) === foremanKey
-                              ? 0
-                              : 1;
-                          const bIsForeman =
-                            foremanKey && normName(b.fullName) === foremanKey
-                              ? 0
-                              : 1;
+                          const aIsForeman = rowIsForeman(a) ? 0 : 1;
+                          const bIsForeman = rowIsForeman(b) ? 0 : 1;
                           return aIsForeman - bIsForeman;
                         });
 
                         return sorted.map((r) => {
-                          const isForeman =
-                            !!foremanKey && normName(r.fullName) === foremanKey;
+                          const isForeman = rowIsForeman(r);
 
                           return (
                             <View

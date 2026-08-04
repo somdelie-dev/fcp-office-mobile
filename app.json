@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.morrisndlovu.officeapp",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -17,7 +17,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#000000",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png"
       },
@@ -86,6 +86,12 @@
           "icon": "./assets/images/icon.png",
           "color": "#1D4ED8",
           "sounds": []
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow FirstClass to use Face ID to verify your identity before recording manual attendance."
         }
       ]
     ],
