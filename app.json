@@ -8,6 +8,7 @@
     "scheme": "officeapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.morrisndlovu.officeapp",
@@ -15,6 +16,7 @@
         "ITSAppUsesNonExemptEncryption": false
       }
     },
+
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#000000",
@@ -29,16 +31,20 @@
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
+
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+
     "notification": {
       "icon": "./assets/images/icon.png",
       "color": "#1D4ED8"
     },
+
     "plugins": [
       "expo-router",
+
       [
         "expo-splash-screen",
         {
@@ -51,14 +57,17 @@
           }
         }
       ],
+
       "expo-secure-store",
       "expo-sqlite",
+
       [
         "expo-audio",
         {
           "microphonePermission": "Allow FirstClass to use your microphone for QR scan audio feedback."
         }
       ],
+
       [
         "expo-camera",
         {
@@ -67,6 +76,7 @@
           "recordAudioAndroid": false
         }
       ],
+
       [
         "expo-image-picker",
         {
@@ -74,12 +84,14 @@
           "cameraPermission": "Allow FirstClass to use your camera to capture worker profile photos."
         }
       ],
+
       [
         "expo-location",
         {
           "locationWhenInUsePermission": "Allow FirstClass to use your location when scanning workers on site."
         }
       ],
+
       [
         "expo-notifications",
         {
@@ -88,27 +100,46 @@
           "sounds": []
         }
       ],
+
       [
         "expo-local-authentication",
         {
           "faceIDPermission": "Allow FirstClass to use Face ID to verify your identity before recording manual attendance."
         }
+      ],
+
+      "expo-asset",
+      "expo-font",
+      "expo-web-browser",
+
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.0"
+          }
+        }
       ]
     ],
+
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
+
     "extra": {
       "router": {},
       "eas": {
         "projectId": "e5e2a1c1-c813-4702-bc95-cbae4fec4b9c"
       }
     },
+
     "owner": "somdeliedevs-organization",
+
     "runtimeVersion": {
       "policy": "appVersion"
     },
+
     "updates": {
       "url": "https://u.expo.dev/e5e2a1c1-c813-4702-bc95-cbae4fec4b9c"
     }
