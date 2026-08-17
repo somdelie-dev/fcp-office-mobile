@@ -2384,6 +2384,10 @@ export async function apiScanOutFace(input: {
   scannedOutAt: string;
   verificationStatus: string;
   confidence: number | null;
+  /** Present when face-service found no usable face, more than one, or rejected the photo's quality before attempting a match — distinct from an ambiguous-confidence match. */
+  reason?: "no_face_detected" | "multiple_faces_detected" | "low_quality";
+  /** Present when reason is "low_quality" — which specific checks failed, for a specific retake instruction. */
+  warnings?: string[];
 }> {
   return apiFetch("/api/app/attendance/scan-out-face", {
     method: "POST",
@@ -2414,7 +2418,7 @@ export async function apiCreateFaceEnrollments(
 ): Promise<{
   results: (
     | { id: string; pose: string; qualityScore: number | null }
-    | { pose: string; error: string }
+    | { pose: string; error: string; warnings?: string[] }
   )[];
 }> {
   const fd = new FormData();

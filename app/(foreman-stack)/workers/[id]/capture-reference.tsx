@@ -15,6 +15,7 @@ import {
   EmployeeDto,
   FaceEnrollmentPose,
 } from "@/lib/apiClient";
+import { describeQualityWarning } from "@/lib/faceQualityMessages";
 
 // react-native-vision-camera-face-detector is a Nitro Module — it calls
 // `NitroModules.createHybridObject(...)` at the top of its own module file,
@@ -89,9 +90,11 @@ interface CapturedPhoto {
 
 // face-service can accept the upload (200 OK) while still rejecting
 // individual photos (no_face_detected / multiple_faces_detected /
-// decode_failed) — those don't become FaceEnrollment rows at all. Mapping
-// the raw code to something a foreman can act on here.
-function describeEnrollError(code: string): string {
+// decode_failed / low_quality) — those don't become FaceEnrollment rows at
+// all. Mapping the raw code(s) to something a foreman can act on here.
+// (describeQualityWarning itself lives in lib/faceQualityMessages.ts, shared
+// with verify.tsx's live-verification retake messaging.)
+function describeEnrollError(code: string, warnings?: string[]): string {
   switch (code) {
     case "no_face_detected":
       return "No face detected — retake";
@@ -99,6 +102,12 @@ function describeEnrollError(code: string): string {
       return "More than one face — retake";
     case "decode_failed":
       return "Couldn't read photo — retake";
+    case "duplicate_face":
+      return "Face already enrolled under another worker — contact your admin";
+    case "low_quality":
+      return warnings?.length
+        ? `${warnings.map(describeQualityWarning).join(", ")} — retake`
+        : "Photo quality too low — retake";
     default:
       return "Rejected — retake";
   }
@@ -459,7 +468,7 @@ export default function CaptureReferencePhotosScreen() {
         // success for photos that were never saved.
         const issues: Record<number, string> = {};
         results.forEach((r, i) => {
-          if ("error" in r) issues[i] = describeEnrollError(r.error);
+          if ("error" in r) issues[i] = describeEnrollError(r.error, r.warnings);
         });
 
         if (Object.keys(issues).length > 0) {
