@@ -29,9 +29,12 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { AuthStyleBackground } from "@/components/AuthStyleBackground";
-import { GlassCard } from "@/components/GlassCard";
 import LoadingOverlay from "@/components/LoadingOverlay";
+import { FaceScreenBackground, GlassPanel, Header } from "@/components/team";
+import {
+  useFaceTheme,
+  type FaceColorPalette,
+} from "@/components/team/faceTheme";
 import {
   apiEnsureSiteDay,
   apiForemanDayCached,
@@ -50,8 +53,8 @@ import {
 import { getSitesScannedToday } from "@/lib/assistantHistoryStore";
 import { useAuth } from "@/lib/auth";
 import { compressImage } from "@/lib/imageCompression";
+import { isCurrentlyOnline } from "@/lib/offline/networkStatus";
 import { cancelSiteDayPhotoReminder } from "@/lib/push";
-import { useTheme } from "@/lib/themeContext";
 import { useLocation } from "@/lib/useLocation";
 import { uploadWithProgress } from "@/lib/upload";
 import { getApiBase, getToken } from "@/lib/api";
@@ -68,9 +71,51 @@ function shortDate(iso: string) {
   return iso;
 }
 
+function getVerificationDisplay(
+  status: PhotoVerificationStatus | null,
+  colors: FaceColorPalette,
+): { label: string; color: string; bgColor: string; borderColor: string } {
+  switch (status) {
+    case "PENDING":
+      return {
+        label: "Pending Review",
+        color: colors.warning,
+        bgColor: colors.warningDim,
+        borderColor: colors.warningBorder,
+      };
+    case "VERIFIED":
+      return {
+        label: "Verified",
+        color: colors.success,
+        bgColor: colors.successDim,
+        borderColor: colors.successBorder,
+      };
+    case "FLAGGED":
+      return {
+        label: "Flagged",
+        color: colors.secondary,
+        bgColor: colors.secondaryDim,
+        borderColor: colors.glassBorderStrong,
+      };
+    case "REJECTED":
+      return {
+        label: "Rejected",
+        color: colors.danger,
+        bgColor: colors.dangerDim,
+        borderColor: colors.dangerBorder,
+      };
+    default:
+      return {
+        label: "—",
+        color: colors.textTertiary,
+        bgColor: colors.glassFill,
+        borderColor: colors.glassBorder,
+      };
+  }
+}
+
 export default function SiteDayPhotoScreen() {
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
+  const { colors, typography, radius, spacing } = useFaceTheme();
   const { getLocationWithAddress } = useLocation();
   const { user, setActingForeman } = useAuth();
 
@@ -224,44 +269,6 @@ export default function SiteDayPhotoScreen() {
   // - Only show if rejected (can retake)
   const shouldShowTakePhotoButton =
     isToday && (!hasAnyPhotoForDay || canRetake);
-
-  // Helper to get verification status label and color
-  const getVerificationDisplay = (
-    status: PhotoVerificationStatus | null,
-  ): { label: string; color: string; bgColor: string } => {
-    switch (status) {
-      case "PENDING":
-        return {
-          label: "Pending Review",
-          color: "#f59e0b",
-          bgColor: "rgba(245,158,11,0.15)",
-        };
-      case "VERIFIED":
-        return {
-          label: "Verified",
-          color: "#22c55e",
-          bgColor: "rgba(34,197,94,0.15)",
-        };
-      case "FLAGGED":
-        return {
-          label: "Flagged",
-          color: "#f97316",
-          bgColor: "rgba(249,115,22,0.15)",
-        };
-      case "REJECTED":
-        return {
-          label: "Rejected",
-          color: "#ef4444",
-          bgColor: "rgba(239,68,68,0.15)",
-        };
-      default:
-        return {
-          label: "—",
-          color: "#64748b",
-          bgColor: "rgba(100,116,139,0.1)",
-        };
-    }
-  };
 
   // Ref to track if initial load has happened
   const initialLoadDoneRef = useRef(false);
@@ -470,6 +477,19 @@ export default function SiteDayPhotoScreen() {
         return false;
       }
 
+      // Photo upload is never queued for offline retry (unlike the other
+      // foreman mutations) — it has to reach the server now. Fail fast with
+      // a clear message instead of silently working through several
+      // minutes of chained timeouts (site day, location, upload, scan-out)
+      // only to land on the same outcome.
+      if (!isCurrentlyOnline()) {
+        Alert.alert(
+          "You're offline",
+          "Photo scan-out needs an internet connection. Please try again once you're back online.",
+        );
+        return false;
+      }
+
       setUploading(true);
       setError(null);
 
@@ -574,11 +594,23 @@ export default function SiteDayPhotoScreen() {
           );
         }
 
-        // Cancel the scheduled site day photo reminder since photo has been uploaded
-        await cancelSiteDayPhotoReminder();
+        // Everything below is post-success cleanup/refresh — the photo is
+        // already on the server and scan-out already ran. None of it should
+        // be able to turn a real success into a false "Upload failed" if a
+        // follow-up network call happens to time out, so it's isolated from
+        // the outer catch rather than left to fall through to it.
+        try {
+          await cancelSiteDayPhotoReminder();
+        } catch (e) {
+          console.warn("Failed to cancel site-day photo reminder:", e);
+        }
 
-        // Refresh both day data and recent photos to update UI
-        await loadDay(true);
+        try {
+          await loadDay(true);
+        } catch (e) {
+          console.warn("Failed to refresh day after upload:", e);
+        }
+
         try {
           const recent = await apiForemanRecentSiteDayPhotosCached(true);
           setRecentPhotos(recent?.photos ?? []);
@@ -645,577 +677,553 @@ export default function SiteDayPhotoScreen() {
 
   if (loading) {
     return (
-      <AuthStyleBackground>
+      <FaceScreenBackground>
+        <Header title="Photo Scan Out" subtitle="Loading…" />
         <LoadingOverlay />
-      </AuthStyleBackground>
+      </FaceScreenBackground>
     );
   }
 
   // Assistant has no sites scanned today
   if (isAssistant && sites.length === 0) {
     return (
-      <AuthStyleBackground>
+      <FaceScreenBackground>
+        <Header title="Photo Scan Out" subtitle="No sites scanned today" />
         <ScrollView contentContainerStyle={styles.container}>
-          <GlassCard style={styles.card}>
-            <Text style={[styles.title, { color: isDark ? "#fff" : "#111" }]}>
-              No Sites Scanned Today
-            </Text>
-            <Text
-              style={[
-                styles.muted,
-                { color: isDark ? "#cbd5e1" : "#475569", marginBottom: 16 },
-              ]}
-            >
-              No one scanned in today. Scan guys in on a site first, then come
-              back here to take site day photos.
-            </Text>
-          </GlassCard>
+          <GlassPanel contentPadding={16} radius={5}>
+            <View style={{ gap: 6 }}>
+              <Text style={typography.headline}>No Sites Scanned Today</Text>
+              <Text style={typography.body}>
+                No one scanned in today. Scan guys in on a site first, then
+                come back here to take site day photos.
+              </Text>
+            </View>
+          </GlassPanel>
         </ScrollView>
-      </AuthStyleBackground>
+      </FaceScreenBackground>
     );
   }
 
   return (
-    <AuthStyleBackground>
+    <FaceScreenBackground>
+      <Header
+        title="Photo Scan Out"
+        subtitle={headerSub ?? selectedSiteName}
+      />
       <ScrollView
         contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.success}
+            colors={[colors.success]}
+          />
         }
       >
         {!!error && (
-          <GlassCard style={styles.card}>
-            <Text style={[styles.error, { color: "#ff6b6b" }]}>{error}</Text>
-          </GlassCard>
+          <GlassPanel contentPadding={16} radius={5}>
+            <Text style={[typography.bodyStrong, { color: colors.danger }]}>
+              {error}
+            </Text>
+          </GlassPanel>
         )}
 
-        <GlassCard style={styles.card}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 8,
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.title, { color: isDark ? "#fff" : "#111" }]}>
-                Site Day Photos
-              </Text>
-              {!!headerSub && (
-                <Text
-                  style={[
-                    styles.sub,
-                    { color: isDark ? "#cbd5e1" : "#334155" },
-                  ]}
-                >
-                  {headerSub}
-                </Text>
-              )}
-            </View>
-
-            <TouchableOpacity
-              onPress={onRefresh}
-              style={{
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: "rgba(148,163,184,.5)",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "800",
-                  color: isDark ? "#e2e8f0" : "#0f172a",
-                }}
-              >
-                Refresh
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Site selector (simple buttons; replace with your own picker if you have one) */}
-          <Text
-            style={[styles.label, { color: isDark ? "#cbd5e1" : "#475569" }]}
-          >
-            Site
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.row}>
-              {sites.map((s) => {
-                const active = s.id === siteId;
-                return (
-                  <TouchableOpacity
-                    key={s.id}
-                    style={[
-                      styles.chip,
-                      {
-                        borderColor: active
-                          ? "#38bdf8"
-                          : "rgba(148,163,184,.5)",
-                        backgroundColor: active
-                          ? "rgba(56,189,248,.18)"
-                          : "rgba(2,6,23,.06)",
-                      },
-                    ]}
-                    onPress={() => setSiteId(s.id)}
-                  >
-                    <Text
-                      style={{
-                        color: isDark ? "#fff" : "#0f172a",
-                        fontWeight: active ? "700" : "600",
-                      }}
-                    >
-                      {s.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </ScrollView>
-
-          {/* Date (always today) */}
-          <Text
-            style={[
-              styles.label,
-              { marginTop: 12, color: isDark ? "#cbd5e1" : "#475569" },
-            ]}
-          >
-            Date
-          </Text>
-          <View style={styles.row}>
-            <View style={styles.datePill}>
-              <Text
-                style={{
-                  color: isDark ? "#fff" : "#0f172a",
-                  fontWeight: "700",
-                }}
-              >
-                {shortDate(dateISO)}
-              </Text>
-            </View>
-          </View>
-
-          {/* Summary */}
-          <View style={{ marginTop: 12 }}>
-            <Text
-              style={[styles.kv, { color: isDark ? "#e2e8f0" : "#0f172a" }]}
-            >
-              Site:{" "}
-              <Text style={{ fontWeight: "800" }}>{selectedSiteName}</Text>
-            </Text>
-            <Text
-              style={[styles.kv, { color: isDark ? "#e2e8f0" : "#0f172a" }]}
-            >
-              Status:{" "}
-              <Text style={{ fontWeight: "800" }}>{summaryStatusLabel}</Text>
-            </Text>
-          </View>
-        </GlassCard>
-
-        {/* Take Photo - Primary action card */}
-        <GlassCard style={styles.card}>
-          <Text
-            style={[styles.sectionTitle, { color: isDark ? "#fff" : "#111" }]}
-          >
-            Take Photo
-          </Text>
-
-          {/* Show verification status if photo was submitted */}
-          {hasSubmittedPhoto && latestVerificationStatus && (
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor: getVerificationDisplay(
-                    latestVerificationStatus,
-                  ).bgColor,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.statusBadgeText,
-                  {
-                    color: getVerificationDisplay(latestVerificationStatus)
-                      .color,
-                  },
-                ]}
-              >
-                {getVerificationDisplay(latestVerificationStatus).label}
-              </Text>
-            </View>
-          )}
-
-          {/* Show rejected warning if date has passed */}
-          {showRejectedWarning && (
-            <View style={styles.warningBox}>
-              <Text style={styles.warningIcon}>⚠️</Text>
+        <GlassPanel contentPadding={16} radius={5}>
+          <View style={{ gap: 4 }}>
+            <View style={styles.headerRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.warningTitle}>Photo Rejected</Text>
-                <Text style={styles.warningText}>
-                  This photo was rejected but the date has passed. Please
-                  contact your admin/supervisor to resolve this issue.
-                </Text>
-                {!!latestPhoto?.verification?.notes && (
-                  <Text style={styles.warningNotes}>
-                    Reason: {latestPhoto.verification.notes}
+                <Text style={typography.headline}>Site Day Photos</Text>
+                {!!headerSub && (
+                  <Text style={[typography.caption, { marginTop: 2 }]}>
+                    {headerSub}
                   </Text>
                 )}
               </View>
-            </View>
-          )}
-
-          {/* Also show rejection reason when rejected but still can retake (today) */}
-          {isRejected && isToday && !!latestPhoto?.verification?.notes && (
-            <Text style={styles.warningNotes}>
-              Reason: {latestPhoto.verification.notes}
-            </Text>
-          )}
-
-          {/* Show success message if photo uploaded today and not rejected */}
-          {hasAnyPhotoForDay && !isRejected && (
-            <View style={styles.successBox}>
-              <Text style={styles.successIcon}>✅</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.successTitle}>Photo Submitted</Text>
-                <Text style={styles.successText}>
-                  Your photo has been submitted successfully and is awaiting
-                  review.
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* Show take/retake photo button only when appropriate */}
-          {shouldShowTakePhotoButton ? (
-            <>
-              <Text
-                style={[
-                  styles.muted,
-                  { color: isDark ? "#cbd5e1" : "#475569" },
-                ]}
-              >
-                {canRetake
-                  ? "Your previous photo was rejected. You can retake the photo today."
-                  : hasFreshRequest
-                    ? "Take a group photo for this site day."
-                    : "Take a site day photo to document today's work."}
-              </Text>
 
               <TouchableOpacity
-                style={[styles.primaryBtn, canRetake && styles.retakeBtn]}
-                onPress={onPressTakePhoto}
+                onPress={onRefresh}
+                style={[
+                  styles.pillButton,
+                  {
+                    borderColor: colors.glassBorder,
+                    backgroundColor: colors.glassFill,
+                  },
+                ]}
               >
-                <Text style={styles.primaryBtnText}>
-                  {canRetake ? "Retake Photo" : "Take Photo"}
+                <Text style={[typography.caption, { color: colors.textPrimary }]}>
+                  Refresh
                 </Text>
               </TouchableOpacity>
+            </View>
 
-              {pendingPhoto && (
-                <View style={styles.previewBlock}>
-                  <Image
-                    source={{ uri: pendingPhoto.uri }}
-                    style={styles.previewImage}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.previewButtonsRow}>
+            {/* Site selector */}
+            <Text style={[typography.label, { marginTop: 6 }]}>Site</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.row}>
+                {sites.map((s) => {
+                  const active = s.id === siteId;
+                  return (
                     <TouchableOpacity
-                      style={styles.secondaryBtn}
-                      onPress={onPressRetakePhoto}
-                    >
-                      <Text
-                        style={[
-                          styles.secondaryBtnText,
-                          { color: isDark ? "#e2e8f0" : "#0f172a" },
-                        ]}
-                      >
-                        Retake
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                      key={s.id}
                       style={[
-                        styles.secondaryBtn,
-                        styles.secondaryBtnPrimary,
-                        uploading && { opacity: 0.6 },
+                        styles.chip,
+                        {
+                          borderColor: active
+                            ? colors.success
+                            : colors.glassBorder,
+                          backgroundColor: active
+                            ? colors.successDim
+                            : colors.glassFill,
+                        },
                       ]}
-                      disabled={uploading}
-                      onPress={onPressSubmitPhoto}
+                      onPress={() => setSiteId(s.id)}
                     >
-                      <Text style={styles.secondaryBtnPrimaryText}>
-                        {uploading ? "Saving..." : "Submit Photo"}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                  {uploadProgress !== null && (
-                    <View style={{ marginTop: 8 }}>
                       <Text
                         style={[
-                          styles.muted,
-                          { color: isDark ? "#cbd5e1" : "#475569" },
+                          typography.body,
+                          active && {
+                            color: colors.textPrimary,
+                            fontWeight: "700",
+                          },
                         ]}
                       >
-                        Uploading: {uploadProgress}%
+                        {s.name}
                       </Text>
-                    </View>
-                  )}
-                </View>
-              )}
-            </>
-          ) : !hasAnyPhotoForDay && !isToday ? (
-            <Text
-              style={[styles.muted, { color: isDark ? "#cbd5e1" : "#475569" }]}
-            >
-              No photo was taken for this date.
-            </Text>
-          ) : null}
-        </GlassCard>
-
-        <GlassCard style={styles.card}>
-          <Text
-            style={[styles.sectionTitle, { color: isDark ? "#fff" : "#111" }]}
-          >
-            Recent site photos
-          </Text>
-
-          {recentPhotos.length === 0 ? (
-            <Text
-              style={[styles.muted, { color: isDark ? "#cbd5e1" : "#475569" }]}
-            >
-              No photos from the last 5 days.
-            </Text>
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.recentStrip}
-            >
-              {recentPhotos.map((p, idx) => (
-                <View key={idx.toString()} style={styles.recentItem}>
-                  <TouchableOpacity
-                    onPress={() => setPreviewUri(p.imageUrl)}
-                    activeOpacity={0.8}
-                  >
-                    <Image
-                      source={{ uri: p.imageUrl }}
-                      style={styles.recentImage}
-                      resizeMode="cover"
-                    />
-                  </TouchableOpacity>
-                  <Text
-                    style={[
-                      styles.recentDate,
-                      { color: isDark ? "#e2e8f0" : "#0f172a" },
-                    ]}
-                  >
-                    {shortDate(p.dateTakenISO)}
-                  </Text>
-                </View>
-              ))}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </ScrollView>
-          )}
-        </GlassCard>
 
-        {/* Photo requests */}
-        <GlassCard style={styles.card}>
-          <Text
-            style={[styles.sectionTitle, { color: isDark ? "#fff" : "#111" }]}
-          >
-            Photo Requests
-          </Text>
+            {/* Date (always today) */}
+            <Text style={[typography.label, { marginTop: 12 }]}>Date</Text>
+            <View style={styles.row}>
+              <View
+                style={[
+                  styles.datePill,
+                  {
+                    borderColor: colors.glassBorder,
+                    backgroundColor: colors.glassFill,
+                  },
+                ]}
+              >
+                <Text style={typography.bodyStrong}>{shortDate(dateISO)}</Text>
+              </View>
+            </View>
 
-          {(!day?.photoRequests || day.photoRequests.length === 0) && (
-            <Text
-              style={[styles.muted, { color: isDark ? "#cbd5e1" : "#475569" }]}
-            >
-              No photo requests for this site/day.
-            </Text>
-          )}
+            {/* Summary */}
+            <View style={{ marginTop: 12, gap: 2 }}>
+              <Text style={typography.body}>
+                Site:{" "}
+                <Text style={typography.bodyStrong}>{selectedSiteName}</Text>
+              </Text>
+              <Text style={typography.body}>
+                Status:{" "}
+                <Text style={typography.bodyStrong}>{summaryStatusLabel}</Text>
+              </Text>
+            </View>
+          </View>
+        </GlassPanel>
 
-          {!!day?.photoRequests?.length && (
-            <View style={{ gap: 10 }}>
-              {day.photoRequests.map((r) => {
-                const active = selectedRequestId === r.id;
-                return (
-                  <TouchableOpacity
-                    key={r.id}
-                    onPress={() => setSelectedRequestId(r.id)}
-                    style={[
-                      styles.requestRow,
-                      {
-                        borderColor: active
-                          ? "#38bdf8"
-                          : "rgba(148,163,184,.35)",
-                        backgroundColor: active
-                          ? "rgba(56,189,248,.14)"
-                          : "rgba(2,6,23,.04)",
-                      },
-                    ]}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={{
-                          color: isDark ? "#fff" : "#0f172a",
-                          fontWeight: "800",
-                        }}
-                      >
-                        {r.status}
-                      </Text>
-                      <Text
-                        style={{
-                          color: isDark ? "#cbd5e1" : "#475569",
-                          marginTop: 2,
-                        }}
-                      >
-                        {requestLabel(r)}
-                      </Text>
-                      {!!r.requestedBy?.name && (
-                        <Text
-                          style={{
-                            color: isDark ? "#cbd5e1" : "#475569",
-                            marginTop: 2,
-                          }}
-                        >
-                          Requested by: {r.requestedBy.name}
-                        </Text>
-                      )}
-                    </View>
+        {/* Take Photo - Primary action card */}
+        <GlassPanel contentPadding={16} radius={5}>
+          <View style={{ gap: 10 }}>
+            <Text style={typography.headline}>Take Photo</Text>
 
-                    <View style={styles.badge}>
-                      <Text style={styles.badgeText}>
-                        {r.photoCount ?? 0} photos
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-
-              {latestRequestedDate && (
+            {/* Show verification status if photo was submitted */}
+            {hasSubmittedPhoto && latestVerificationStatus && (
+              <View
+                style={[
+                  styles.statusBadge,
+                  {
+                    backgroundColor: getVerificationDisplay(
+                      latestVerificationStatus,
+                      colors,
+                    ).bgColor,
+                    borderColor: getVerificationDisplay(
+                      latestVerificationStatus,
+                      colors,
+                    ).borderColor,
+                  },
+                ]}
+              >
                 <Text
                   style={[
-                    styles.muted,
-                    { color: isDark ? "#cbd5e1" : "#475569" },
+                    styles.statusBadgeText,
+                    {
+                      color: getVerificationDisplay(
+                        latestVerificationStatus,
+                        colors,
+                      ).color,
+                    },
                   ]}
                 >
-                  Last photo request date: {shortDate(latestRequestedDate)}
+                  {getVerificationDisplay(latestVerificationStatus, colors).label}
                 </Text>
-              )}
-            </View>
-          )}
-        </GlassCard>
+              </View>
+            )}
 
-        {/* Existing photos */}
-        <GlassCard style={styles.card}>
-          <Text
-            style={[styles.sectionTitle, { color: isDark ? "#fff" : "#111" }]}
-          >
-            Uploaded Photos
-          </Text>
+            {/* Show rejected warning if date has passed */}
+            {showRejectedWarning && (
+              <View
+                style={[
+                  styles.infoBox,
+                  {
+                    backgroundColor: colors.dangerDim,
+                    borderColor: colors.dangerBorder,
+                  },
+                ]}
+              >
+                <Text style={styles.infoIcon}>⚠️</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.infoTitle, { color: colors.danger }]}>
+                    Photo Rejected
+                  </Text>
+                  <Text style={[styles.infoText, { color: colors.danger }]}>
+                    This photo was rejected but the date has passed. Please
+                    contact your admin/supervisor to resolve this issue.
+                  </Text>
+                  {!!latestPhoto?.verification?.notes && (
+                    <Text style={[styles.infoNotes, { color: colors.danger }]}>
+                      Reason: {latestPhoto.verification.notes}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
 
-          {(!day?.photos || day.photos.length === 0) && (
-            <Text
-              style={[styles.muted, { color: isDark ? "#cbd5e1" : "#475569" }]}
-            >
-              No photos uploaded yet.
-            </Text>
-          )}
+            {/* Also show rejection reason when rejected but still can retake (today) */}
+            {isRejected && isToday && !!latestPhoto?.verification?.notes && (
+              <Text style={[styles.infoNotes, { color: colors.danger }]}>
+                Reason: {latestPhoto.verification.notes}
+              </Text>
+            )}
 
-          {!!day?.photos?.length && (
-            <View style={{ gap: 12 }}>
-              {day.photos.map((p: SiteDayPhotoDto) => {
-                const verificationDisplay = getVerificationDisplay(
-                  p.verification?.status ?? null,
-                );
-                return (
-                  <View key={p.id} style={styles.photoRow}>
+            {/* Show success message if photo uploaded today and not rejected */}
+            {hasAnyPhotoForDay && !isRejected && (
+              <View
+                style={[
+                  styles.infoBox,
+                  {
+                    backgroundColor: colors.successDim,
+                    borderColor: colors.successBorder,
+                  },
+                ]}
+              >
+                <Text style={styles.infoIcon}>✅</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.infoTitle, { color: colors.success }]}>
+                    Photo Submitted
+                  </Text>
+                  <Text style={[styles.infoText, { color: colors.success }]}>
+                    Your photo has been submitted successfully and is awaiting
+                    review.
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Show take/retake photo button only when appropriate */}
+            {shouldShowTakePhotoButton ? (
+              <>
+                <Text style={typography.body}>
+                  {canRetake
+                    ? "Your previous photo was rejected. You can retake the photo today."
+                    : hasFreshRequest
+                      ? "Take a group photo for this site day."
+                      : "Take a site day photo to document today's work."}
+                </Text>
+
+                <TouchableOpacity
+                  style={[
+                    styles.actionButton,
+                    {
+                      backgroundColor: canRetake
+                        ? colors.warning
+                        : colors.success,
+                    },
+                  ]}
+                  onPress={onPressTakePhoto}
+                >
+                  <Text
+                    style={[typography.bodyStrong, { color: colors.textOnPrimary }]}
+                  >
+                    {canRetake ? "Retake Photo" : "Take Photo"}
+                  </Text>
+                </TouchableOpacity>
+
+                {pendingPhoto && (
+                  <View
+                    style={[
+                      styles.previewBlock,
+                      { borderColor: colors.glassBorder },
+                    ]}
+                  >
+                    <Image
+                      source={{ uri: pendingPhoto.uri }}
+                      style={[
+                        styles.previewImage,
+                        { backgroundColor: colors.glassFill },
+                      ]}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.previewButtonsRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.pillButton,
+                          {
+                            borderColor: colors.glassBorder,
+                            backgroundColor: colors.glassFillStrong,
+                          },
+                        ]}
+                        onPress={onPressRetakePhoto}
+                      >
+                        <Text style={typography.bodyStrong}>Retake</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.pillButton,
+                          {
+                            borderColor: colors.primary,
+                            backgroundColor: colors.primary,
+                          },
+                          uploading && { opacity: 0.6 },
+                        ]}
+                        disabled={uploading}
+                        onPress={onPressSubmitPhoto}
+                      >
+                        <Text
+                          style={[
+                            typography.bodyStrong,
+                            { color: colors.textOnPrimary },
+                          ]}
+                        >
+                          {uploading ? "Saving..." : "Submit Photo"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    {uploadProgress !== null && (
+                      <Text style={typography.body}>
+                        Uploading: {uploadProgress}%
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </>
+            ) : !hasAnyPhotoForDay && !isToday ? (
+              <Text style={typography.body}>
+                No photo was taken for this date.
+              </Text>
+            ) : null}
+          </View>
+        </GlassPanel>
+
+        <GlassPanel contentPadding={16} radius={5}>
+          <View style={{ gap: 10 }}>
+            <Text style={typography.headline}>Recent site photos</Text>
+
+            {recentPhotos.length === 0 ? (
+              <Text style={typography.body}>
+                No photos from the last 5 days.
+              </Text>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.recentStrip}
+              >
+                {recentPhotos.map((p, idx) => (
+                  <View key={idx.toString()} style={styles.recentItem}>
                     <TouchableOpacity
                       onPress={() => setPreviewUri(p.imageUrl)}
                       activeOpacity={0.8}
                     >
                       <Image
                         source={{ uri: p.imageUrl }}
-                        style={styles.thumb}
+                        style={[
+                          styles.recentImage,
+                          { backgroundColor: colors.glassFill },
+                        ]}
                         resizeMode="cover"
                       />
                     </TouchableOpacity>
-                    <View style={{ flex: 1 }}>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: isDark ? "#fff" : "#0f172a",
-                            fontWeight: "800",
-                            flex: 1,
-                          }}
-                          numberOfLines={1}
-                        >
-                          {p.uploadedBy?.name
-                            ? `By ${p.uploadedBy.name}`
-                            : "Uploaded"}
+                    <Text style={[typography.caption, { marginTop: 4 }]}>
+                      {shortDate(p.dateTakenISO)}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </GlassPanel>
+
+        {/* Photo requests */}
+        <GlassPanel contentPadding={16} radius={5}>
+          <View style={{ gap: 10 }}>
+            <Text style={typography.headline}>Photo Requests</Text>
+
+            {(!day?.photoRequests || day.photoRequests.length === 0) && (
+              <Text style={typography.body}>
+                No photo requests for this site/day.
+              </Text>
+            )}
+
+            {!!day?.photoRequests?.length && (
+              <View style={{ gap: 10 }}>
+                {day.photoRequests.map((r) => {
+                  const active = selectedRequestId === r.id;
+                  return (
+                    <TouchableOpacity
+                      key={r.id}
+                      onPress={() => setSelectedRequestId(r.id)}
+                      style={[
+                        styles.requestRow,
+                        {
+                          borderColor: active
+                            ? colors.success
+                            : colors.glassBorder,
+                          backgroundColor: active
+                            ? colors.successDim
+                            : colors.glassFill,
+                        },
+                      ]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={typography.bodyStrong}>{r.status}</Text>
+                        <Text style={[typography.caption, { marginTop: 2 }]}>
+                          {requestLabel(r)}
                         </Text>
-                        {p.verification?.status && (
-                          <View
-                            style={[
-                              styles.photoStatusBadge,
-                              { backgroundColor: verificationDisplay.bgColor },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.photoStatusBadgeText,
-                                { color: verificationDisplay.color },
-                              ]}
-                            >
-                              {verificationDisplay.label}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text
-                        style={{
-                          color: isDark ? "#cbd5e1" : "#475569",
-                          marginTop: 2,
-                        }}
-                      >
-                        {p.uploadedAt}
-                      </Text>
-                      {!!p.requestId && (
-                        <Text
-                          style={{
-                            color: isDark ? "#cbd5e1" : "#475569",
-                            marginTop: 2,
-                          }}
-                        >
-                          Linked to request
-                        </Text>
-                      )}
-                      {p.verification?.status === "REJECTED" &&
-                        p.verification?.notes && (
-                          <Text
-                            style={{
-                              color: "#ef4444",
-                              marginTop: 4,
-                              fontSize: 12,
-                              fontWeight: "600",
-                            }}
-                          >
-                            Reason: {p.verification.notes}
+                        {!!r.requestedBy?.name && (
+                          <Text style={[typography.caption, { marginTop: 2 }]}>
+                            Requested by: {r.requestedBy.name}
                           </Text>
                         )}
+                      </View>
+
+                      <View
+                        style={[
+                          styles.badge,
+                          { backgroundColor: colors.glassFillStrong },
+                        ]}
+                      >
+                        <Text style={[typography.caption, { color: colors.textPrimary }]}>
+                          {r.photoCount ?? 0} photos
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+
+                {latestRequestedDate && (
+                  <Text style={typography.body}>
+                    Last photo request date: {shortDate(latestRequestedDate)}
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
+        </GlassPanel>
+
+        {/* Existing photos */}
+        <GlassPanel contentPadding={16} radius={5}>
+          <View style={{ gap: 10 }}>
+            <Text style={typography.headline}>Uploaded Photos</Text>
+
+            {(!day?.photos || day.photos.length === 0) && (
+              <Text style={typography.body}>No photos uploaded yet.</Text>
+            )}
+
+            {!!day?.photos?.length && (
+              <View style={{ gap: 12 }}>
+                {day.photos.map((p: SiteDayPhotoDto) => {
+                  const verificationDisplay = getVerificationDisplay(
+                    p.verification?.status ?? null,
+                    colors,
+                  );
+                  return (
+                    <View
+                      key={p.id}
+                      style={[styles.photoRow, { borderColor: colors.glassBorder }]}
+                    >
+                      <TouchableOpacity
+                        onPress={() => setPreviewUri(p.imageUrl)}
+                        activeOpacity={0.8}
+                      >
+                        <Image
+                          source={{ uri: p.imageUrl }}
+                          style={[
+                            styles.thumb,
+                            { backgroundColor: colors.glassFill },
+                          ]}
+                          resizeMode="cover"
+                        />
+                      </TouchableOpacity>
+                      <View style={{ flex: 1 }}>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            gap: 8,
+                          }}
+                        >
+                          <Text
+                            style={[typography.bodyStrong, { flex: 1 }]}
+                            numberOfLines={1}
+                          >
+                            {p.uploadedBy?.name
+                              ? `By ${p.uploadedBy.name}`
+                              : "Uploaded"}
+                          </Text>
+                          {p.verification?.status && (
+                            <View
+                              style={[
+                                styles.photoStatusBadge,
+                                {
+                                  backgroundColor: verificationDisplay.bgColor,
+                                  borderColor: verificationDisplay.borderColor,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.photoStatusBadgeText,
+                                  { color: verificationDisplay.color },
+                                ]}
+                              >
+                                {verificationDisplay.label}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={[typography.caption, { marginTop: 2 }]}>
+                          {p.uploadedAt}
+                        </Text>
+                        {!!p.requestId && (
+                          <Text style={[typography.caption, { marginTop: 2 }]}>
+                            Linked to request
+                          </Text>
+                        )}
+                        {p.verification?.status === "REJECTED" &&
+                          p.verification?.notes && (
+                            <Text
+                              style={[
+                                styles.infoNotes,
+                                { color: colors.danger, marginTop: 4 },
+                              ]}
+                            >
+                              Reason: {p.verification.notes}
+                            </Text>
+                          )}
+                      </View>
                     </View>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-        </GlassCard>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        </GlassPanel>
 
         <View style={{ height: 20 }} />
       </ScrollView>
@@ -1238,41 +1246,31 @@ export default function SiteDayPhotoScreen() {
               />
             )}
             <TouchableOpacity
-              style={styles.modalCloseBtn}
+              style={[
+                styles.pillButton,
+                { marginTop: 16, backgroundColor: colors.glassFillStrong },
+              ]}
               onPress={() => setPreviewUri(null)}
             >
-              <Text style={styles.modalCloseText}>Close</Text>
+              <Text style={typography.bodyStrong}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-    </AuthStyleBackground>
+    </FaceScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 14,
+    padding: 16,
     gap: 12,
   },
-  card: {
-    padding: 14,
-    gap: 10,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "900",
-  },
-  sub: {
-    marginTop: 2,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    marginTop: 6,
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
   },
   row: {
     flexDirection: "row",
@@ -1288,7 +1286,6 @@ const styles = StyleSheet.create({
   },
   datePill: {
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,.35)",
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -1296,33 +1293,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  smallBtn: {
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,.35)",
-    borderRadius: 999,
-    paddingHorizontal: 10,
+  pillButton: {
+    paddingHorizontal: 14,
     paddingVertical: 10,
-  },
-  smallBtnText: {
-    fontWeight: "800",
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "900",
-  },
-  muted: {
-    fontSize: 13,
-    fontWeight: "600",
-    lineHeight: 18,
-  },
-  kv: {
-    fontSize: 13,
-    fontWeight: "700",
-    marginTop: 4,
-  },
-  error: {
-    fontSize: 13,
-    fontWeight: "800",
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   requestRow: {
     borderWidth: 1,
@@ -1336,11 +1313,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: "rgba(15,23,42,.08)",
-  },
-  badgeText: {
-    fontWeight: "900",
-    fontSize: 12,
   },
   recentStrip: {
     paddingTop: 4,
@@ -1354,16 +1326,9 @@ const styles = StyleSheet.create({
     width: 90,
     height: 90,
     borderRadius: 10,
-    backgroundColor: "rgba(15,23,42,.12)",
-  },
-  recentDate: {
-    marginTop: 4,
-    fontSize: 11,
-    fontWeight: "800",
   },
   photoRow: {
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,.25)",
     borderRadius: 16,
     padding: 10,
     flexDirection: "row",
@@ -1374,11 +1339,10 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 12,
-    backgroundColor: "rgba(148,163,184,.25)",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.85)",
+    backgroundColor: "rgba(0,0,0,0.9)",
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
@@ -1392,23 +1356,10 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "80%",
   },
-  modalCloseBtn: {
-    marginTop: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: "rgba(15,23,42,0.9)",
-  },
-  modalCloseText: {
-    color: "#e2e8f0",
-    fontWeight: "900",
-    fontSize: 13,
-  },
   previewBlock: {
-    marginTop: 12,
+    marginTop: 10,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,.35)",
     padding: 10,
     gap: 10,
   },
@@ -1416,56 +1367,25 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 180,
     borderRadius: 12,
-    backgroundColor: "rgba(15,23,42,.08)",
   },
   previewButtonsRow: {
     flexDirection: "row",
     gap: 10,
     justifyContent: "flex-end",
   },
-  secondaryBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,.5)",
-  },
-  secondaryBtnText: {
-    fontWeight: "800",
-    fontSize: 12,
-    color: "#0f172a",
-  },
-  secondaryBtnPrimary: {
-    backgroundColor: "#0284c7",
-    borderColor: "#0284c7",
-  },
-  secondaryBtnPrimaryText: {
-    fontWeight: "900",
-    fontSize: 12,
-    color: "white",
-  },
-  primaryBtn: {
-    marginTop: 10,
+  actionButton: {
+    marginTop: 2,
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0284c7", // sky-600
-  },
-  primaryBtnText: {
-    color: "white",
-    fontWeight: "900",
-    fontSize: 14,
-  },
-  retakeBtn: {
-    backgroundColor: "#f97316", // orange-500
   },
   statusBadge: {
     alignSelf: "flex-start",
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    marginBottom: 4,
+    borderWidth: 1,
   },
   statusBadgeText: {
     fontWeight: "800",
@@ -1475,68 +1395,37 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 3,
+    borderWidth: 1,
   },
   photoStatusBadgeText: {
     fontWeight: "800",
     fontSize: 10,
   },
-  warningBox: {
+  infoBox: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 10,
     padding: 12,
     borderRadius: 12,
-    backgroundColor: "rgba(239,68,68,0.1)",
     borderWidth: 1,
-    borderColor: "rgba(239,68,68,0.3)",
-    marginBottom: 8,
   },
-  warningIcon: {
+  infoIcon: {
     fontSize: 20,
   },
-  warningTitle: {
+  infoTitle: {
     fontSize: 14,
     fontWeight: "900",
-    color: "#ef4444",
   },
-  warningText: {
+  infoText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#dc2626",
     marginTop: 2,
     lineHeight: 18,
   },
-  warningNotes: {
+  infoNotes: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#b91c1c",
     marginTop: 6,
     fontStyle: "italic",
-  },
-  successBox: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: "rgba(34,197,94,0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(34,197,94,0.3)",
-    marginBottom: 8,
-  },
-  successIcon: {
-    fontSize: 20,
-  },
-  successTitle: {
-    fontSize: 14,
-    fontWeight: "900",
-    color: "#22c55e",
-  },
-  successText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#16a34a",
-    marginTop: 2,
-    lineHeight: 18,
   },
 });

@@ -116,15 +116,21 @@ export function useLocation() {
         const { latitude, longitude, accuracy } = position.coords;
         const timestamp = position.timestamp;
 
-        // Reverse geocode to get address
+        // Reverse geocode to get address. Bounded the same way as the GPS
+        // fix above — on a slow connection this call can otherwise hang
+        // indefinitely with no timeout of its own, stalling the whole
+        // upload before it even starts. An address is a nice-to-have here,
+        // never worth blocking on.
         let address: string | null = null;
         try {
-          const geocodeResults = await Location.reverseGeocodeAsync({
-            latitude,
-            longitude,
-          });
+          const geocodeResults = await Promise.race([
+            Location.reverseGeocodeAsync({ latitude, longitude }),
+            new Promise<null>((resolve) =>
+              setTimeout(() => resolve(null), 8000),
+            ),
+          ]);
 
-          if (geocodeResults.length > 0) {
+          if (geocodeResults && geocodeResults.length > 0) {
             address = formatAddress(geocodeResults[0]);
           }
         } catch {
@@ -230,12 +236,12 @@ export async function getDeviceLocationWithAddress(): Promise<LocationData | nul
 
     let address: string | null = null;
     try {
-      const geocodeResults = await Location.reverseGeocodeAsync({
-        latitude,
-        longitude,
-      });
+      const geocodeResults = await Promise.race([
+        Location.reverseGeocodeAsync({ latitude, longitude }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+      ]);
 
-      if (geocodeResults.length > 0) {
+      if (geocodeResults && geocodeResults.length > 0) {
         const g = geocodeResults[0];
         address =
           [g.streetNumber, g.street, g.city, g.region, g.country]
