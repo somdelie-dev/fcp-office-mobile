@@ -928,9 +928,17 @@ export type ApiUser = {
   }>;
 };
 
+export type AppSettingsDto = {
+  scanOutFaceEnabled: boolean;
+  scanOutPhotoEnabled: boolean;
+};
+
 export type ApiMeResponse = {
   user: ApiUser;
   sites: Site[];
+  // Admin-controlled feature flags. Older cached responses (pre-dating this
+  // field) won't have it, so callers should fall back to both enabled.
+  appSettings?: AppSettingsDto;
 };
 
 export async function apiMe(): Promise<ApiMeResponse> {
