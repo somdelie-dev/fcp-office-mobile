@@ -1,22 +1,35 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
 import { Platform } from "react-native";
 import { isCurrentlyOnline } from "./offline/networkStatus";
 
-// https://firstclassprojects.netlify.app/
+// https://fcp.cautious-tech.com/
 
-// const DEV_LAN_IP = "http://172.20.10.6:3000"; // change
-// const DEV_LAN_IP = "http://192.168.0.154:3000"; // change
-// const DEV_LAN_IP = "http://10.0.0.11:3000"; // change
-// "https://firstclassprojects.netlify.app";
-// export function getApiBase() {
-//   if (__DEV__ && Platform.OS === "android") return `http://${DEV_LAN_IP}:3000`;
-//   if (__DEV__ && Platform.OS === "ios") return `http://${DEV_LAN_IP}:3000`;
-//   return `http://${DEV_LAN_IP}:3000`;
-// }
+const PROD_API_BASE = "https://fcp.cautious-tech.com";
+const DEV_API_PORT = 3000;
+
+/**
+ * In dev, derive the backend host from the address Metro is actually
+ * reachable on (the same host Expo Go used to load this bundle), instead of
+ * a hardcoded LAN IP. That address changes whenever WiFi/VPN interfaces
+ * reorder, so hardcoding it breaks silently on phones on the real LAN.
+ */
+function getDevLanHost(): string | null {
+  const hostUri =
+    Constants.expoConfig?.hostUri ?? (Constants as any).expoGoConfig?.hostUri;
+  if (!hostUri) return null;
+  const host = hostUri.split(":")[0];
+  return host || null;
+}
 
 export function getApiBase() {
-  return "http://192.168.0.154:3000"; // change to your server URL or use env variable
-  // return "https://fcp.cautious-tech.com"; // change to your server URL or use env variable
+  if (__DEV__) {
+    const host = getDevLanHost();
+    if (host) return `http://${host}:${DEV_API_PORT}`;
+    // Web dev server (no Metro hostUri) talks to itself on localhost.
+    if (Platform.OS === "web") return `http://localhost:${DEV_API_PORT}`;
+  }
+  return PROD_API_BASE;
 }
 
 const TOKEN_KEY = "auth_token_v1";
@@ -166,12 +179,22 @@ async function fetchDirect(
           await AsyncStorage.removeItem("acting_foreman_id");
         }
 
-        const msg =
+        const msgBody =
           json?.error ||
           json?.message ||
-          (text && text.length < 200 ? text : null) ||
-          `Request failed (${res.status})`;
-        throw new Error(msg);
+          (text && text.length < 200 ? text : null);
+        const msg = msgBody ?? `Request failed (${res.status})`;
+
+        // Throw an Error but attach useful metadata (status, path, response body)
+        const err: any = new Error(msg);
+        err.status = res.status;
+        try {
+          err.statusText = (res as any).statusText ?? undefined;
+        } catch {}
+        err.path = path;
+        err.response = json ?? (text ? { text } : undefined) ?? null;
+
+        throw err;
       }
 
       return json;
