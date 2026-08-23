@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
   button: {
-    backgroundColor: "#262D68",
+    backgroundColor: "#16A34A",
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 16,

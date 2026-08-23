@@ -37,7 +37,7 @@ const themes = {
     textPrimary: "#e5e7eb",
     textSecondary: "#94a3b8",
     cardBg: "rgba(15,23,42,0.85)",
-    accent: "#38bdf8",
+    accent: "#22c55e",
     success: "#4ade80",
     danger: "#ef4444",
     border: "rgba(148,163,184,0.15)",
@@ -47,7 +47,7 @@ const themes = {
     textPrimary: "#111111",
     textSecondary: "#666666",
     cardBg: "rgba(255,255,255,0.9)",
-    accent: "#3b82f6",
+    accent: "#22c55e",
     success: "#22c55e",
     danger: "#ef4444",
     border: "rgba(0,0,0,0.08)",
@@ -1054,7 +1054,7 @@ export default function TransferEmployeeScreen() {
                             : isDark
                               ? "rgba(30,41,59,0.9)"
                               : "rgba(241,245,249,0.95)",
-                          borderColor: isSelected ? "#3b82f6" : colors.border,
+                          borderColor: isSelected ? "#22c55e" : colors.border,
                         },
                       ]}
                       onPress={() => {
@@ -1078,7 +1078,7 @@ export default function TransferEmployeeScreen() {
                         </Text>
                       </View>
                       {isSelected && (
-                        <Ionicons name="checkmark" size={20} color="#3b82f6" />
+                        <Ionicons name="checkmark" size={20} color="#22c55e" />
                       )}
                     </TouchableOpacity>
                   );
@@ -1156,7 +1156,7 @@ export default function TransferEmployeeScreen() {
                             : isDark
                               ? "rgba(30,41,59,0.9)"
                               : "rgba(241,245,249,0.95)",
-                          borderColor: isSelected ? "#3b82f6" : colors.border,
+                          borderColor: isSelected ? "#22c55e" : colors.border,
                         },
                       ]}
                       onPress={() => {
@@ -1173,7 +1173,7 @@ export default function TransferEmployeeScreen() {
                         {item.name}
                       </Text>
                       {isSelected && (
-                        <Ionicons name="checkmark" size={20} color="#3b82f6" />
+                        <Ionicons name="checkmark" size={20} color="#22c55e" />
                       )}
                     </TouchableOpacity>
                   );
@@ -1248,8 +1248,8 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0,0,0,0.08)",
   },
   siteBtnActive: {
-    backgroundColor: "#3b82f6",
-    borderColor: "#3b82f6",
+    backgroundColor: "#22c55e",
+    borderColor: "#22c55e",
   },
   siteBtnText: {
     fontWeight: "800",
@@ -1313,7 +1313,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 8,
-    backgroundColor: "#3b82f6",
+    backgroundColor: "#22c55e",
   },
   transferBtnText: {
     color: "#fff",
@@ -1414,7 +1414,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 10,
-    backgroundColor: "#3b82f6",
+    backgroundColor: "#22c55e",
     alignItems: "center",
   },
   confirmBtnText: {

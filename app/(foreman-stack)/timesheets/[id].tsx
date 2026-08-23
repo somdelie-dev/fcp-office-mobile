@@ -18,6 +18,7 @@ import {
   View,
 } from "react-native";
 import { WebView } from "react-native-webview";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   apiForemanTimesheetDetailMobileCached,
   type TimesheetDetailDto,
@@ -111,6 +112,7 @@ function normalizeTimesheet(ts: TimesheetDetailDto): TimesheetDetailDto {
 }
 export default function ForemanTimesheetDetail() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const colors = themes[theme];
   const styles = getStyles(colors);
 
@@ -673,7 +675,7 @@ export default function ForemanTimesheetDetail() {
           onRequestClose={() => setPdfUri(null)}
         >
           <View style={styles.pdfModal}>
-            <View style={styles.pdfHeader}>
+            <View style={[styles.pdfHeader, { paddingTop: insets.top + 12 }]}>
               <Text style={styles.pdfTitle}>Timesheet PDF</Text>
               <Pressable style={styles.pdfClose} onPress={() => setPdfUri(null)}>
                 <Ionicons name="close" size={22} color="#fff" />
@@ -733,16 +735,16 @@ const themes = {
     border: "#1f2a44",
     textPrimary: "white",
     textSecondary: "#94a3b8",
-    accent: "#38bdf8",
-    accentLight: "rgba(56,189,248,0.18)",
+    accent: "#22c55e",
+    accentLight: "rgba(34,197,94,0.18)",
     success: "#16a34a",
     successLight: "rgba(22,163,74,0.12)",
     error: "#dc2626",
     errorLight: "rgba(220,38,38,0.10)",
     warning: "#f59e0b",
     warningLight: "rgba(245,158,11,0.14)",
-    info: "#38bdf8",
-    infoLight: "rgba(56,189,248,0.14)",
+    info: "#22c55e",
+    infoLight: "rgba(34,197,94,0.14)",
   },
   light: {
     bg: "#f8fafc",
@@ -750,16 +752,16 @@ const themes = {
     border: "#e2e8f0",
     textPrimary: "#0f172a",
     textSecondary: "#64748b",
-    accent: "#0ea5e9",
-    accentLight: "rgba(14,165,233,0.08)",
+    accent: "#16A34A",
+    accentLight: "rgba(22,163,74,0.08)",
     success: "#22c55e",
     successLight: "rgba(34,197,94,0.12)",
     error: "#ef4444",
     errorLight: "rgba(239,68,68,0.10)",
     warning: "#f59e0b",
     warningLight: "rgba(245,158,11,0.14)",
-    info: "#262D68",
-    infoLight: "rgba(38,45,104,0.14)",
+    info: "#16A34A",
+    infoLight: "rgba(34,197,94,0.14)",
   },
 };
 
@@ -837,7 +839,7 @@ const getStyles = (colors: (typeof themes)["dark"]) =>
       backgroundColor: colors.bgSecondary,
     },
     pdfHeader: {
-      paddingTop: 52,
+      // paddingTop is set dynamically from useSafeAreaInsets() above.
       paddingBottom: 12,
       paddingHorizontal: 16,
       backgroundColor: colors.info,

@@ -1,4 +1,4 @@
-﻿// AdminTimesheetDetail.tsx
+// AdminTimesheetDetail.tsx
 import { AuthStyleBackground } from "@/components/AuthStyleBackground";
 import { GlassCard } from "@/components/GlassCard";
 import LoadingOverlay from "@/components/LoadingOverlay";
@@ -7,10 +7,13 @@ import { useTheme } from "@/lib/themeContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { File, Paths } from "expo-file-system";
+import * as Sharing from "expo-sharing";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -18,9 +21,13 @@ import {
   Text,
   View,
 } from "react-native";
+import { WebView } from "react-native-webview";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CustomAlert, type AlertButton } from "@/components/CustomAlert";
+import { getApiBase, getToken } from "@/lib/api";
 import {
+  adminTimesheetPdfPath,
   apiAdminApproveTimesheet,
   apiAdminMarkPaid,
   apiAdminRejectTimesheet,
@@ -38,9 +45,9 @@ const themes = {
     textPrimary: "white",
     textSecondary: "#94a3b8",
     textTertiary: "#cbd5e1",
-    accent: "#38bdf8",
-    accentLight: "rgba(56,189,248,0.18)",
-    accentBorder: "rgba(56,189,248,0.45)",
+    accent: "#22c55e",
+    accentLight: "rgba(34,197,94,0.18)",
+    accentBorder: "rgba(34,197,94,0.45)",
     success: "#16a34a",
     error: "#dc2626",
     warning: "#f59e0b",
@@ -54,9 +61,9 @@ const themes = {
     textPrimary: "#0f172a",
     textSecondary: "#64748b",
     textTertiary: "#475569",
-    accent: "#0ea5e9",
-    accentLight: "rgba(14,165,233,0.08)",
-    accentBorder: "rgba(14,165,233,0.3)",
+    accent: "#16A34A",
+    accentLight: "rgba(22,163,74,0.08)",
+    accentBorder: "rgba(22,163,74,0.3)",
     success: "#22c55e",
     error: "#ef4444",
     warning: "#fbbf24",
@@ -329,6 +336,7 @@ export default function AdminTimesheetDetail() {
     siteId?: string;
   }>();
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const colors = themes[theme];
   const adminTimesheetId = String(id ?? "");
   const siteFilterId = siteId ? String(siteId) : undefined;
@@ -339,9 +347,9 @@ export default function AdminTimesheetDetail() {
       theme === "dark" ? "rgba(148,163,184,0.15)" : "rgba(0,0,0,0.08)",
     daysCellBg: theme === "dark" ? "rgba(245,158,11,0.12)" : "#fef3e2",
     payCellBg: theme === "dark" ? "rgba(34,197,94,0.12)" : "#e8f5e9",
-    foremanRowBg: theme === "dark" ? "rgba(56,189,248,0.1)" : "#e3f2fd",
+    foremanRowBg: theme === "dark" ? "rgba(34,197,94,0.1)" : "#e3f2fd",
     headerBg:
-      theme === "dark" ? "rgba(56,189,248,0.12)" : "rgba(38, 45, 104, 0.06)",
+      theme === "dark" ? "rgba(34,197,94,0.12)" : "rgba(34, 197, 94, 0.06)",
     presentCellBg:
       theme === "dark" ? "rgba(22,163,74,0.15)" : "rgba(26, 127, 55, 0.08)",
     absentCellBg:
@@ -356,6 +364,10 @@ export default function AdminTimesheetDetail() {
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
   const [alertButtons, setAlertButtons] = useState<AlertButton[]>([]);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [pdfUri, setPdfUri] = useState<string | null>(null);
+  const [pdfFilename, setPdfFilename] = useState<string | null>(null);
+  const [sharingPdf, setSharingPdf] = useState(false);
 
   const showAlert = (
     title: string,
@@ -564,6 +576,65 @@ export default function AdminTimesheetDetail() {
     [adminTimesheetId, refresh, showAlert],
   );
 
+  const downloadPdf = useCallback(async () => {
+    if (!adminTimesheetId || !data) return;
+
+    setDownloadingPdf(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        showAlert("Unauthorized", "Please sign in again.", [
+          { text: "OK", style: "default" },
+        ]);
+        return;
+      }
+
+      const url = `${getApiBase()}${adminTimesheetPdfPath(adminTimesheetId, siteFilterId)}`;
+      const filename = `timesheet-${data.startISO}-${data.endISO}-${siteFilterId ?? "all"}-${Date.now()}.pdf`;
+      const destination = new File(Paths.document, filename);
+      const result = await File.downloadFileAsync(url, destination, {
+        headers: { Authorization: `Bearer ${token}` },
+        idempotent: false,
+      });
+
+      setPdfUri(result.uri);
+      setPdfFilename(filename);
+    } catch (e: any) {
+      showAlert("PDF Download Failed", e?.message ?? "Please try again.", [
+        { text: "OK", style: "default" },
+      ]);
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }, [adminTimesheetId, data, siteFilterId, showAlert]);
+
+  const sharePdf = useCallback(async () => {
+    if (!pdfUri) return;
+
+    setSharingPdf(true);
+    try {
+      if (!(await Sharing.isAvailableAsync())) {
+        showAlert(
+          "PDF Saved",
+          `Saved inside the app as ${pdfFilename ?? "timesheet.pdf"}.`,
+          [{ text: "OK", style: "default" }],
+        );
+        return;
+      }
+      await Sharing.shareAsync(pdfUri, {
+        mimeType: "application/pdf",
+        UTI: "com.adobe.pdf",
+        dialogTitle: "Save or share timesheet PDF",
+      });
+    } catch (e: any) {
+      showAlert("Share Failed", e?.message ?? "Failed to share the PDF.", [
+        { text: "OK", style: "default" },
+      ]);
+    } finally {
+      setSharingPdf(false);
+    }
+  }, [pdfFilename, pdfUri, showAlert]);
+
   const reject = useCallback(() => {
     if (!adminTimesheetId) return;
 
@@ -702,9 +773,29 @@ export default function AdminTimesheetDetail() {
             </View>
           </View>
 
-          <Text style={[styles.sub2, { color: colors.textSecondary }]}>
-            Fortnight: {data.startISO} {'→'} {data.endISO}
-          </Text>
+          <View style={styles.headerRow2}>
+            <Text style={[styles.sub2, { color: colors.textSecondary }]}>
+              Fortnight: {data.startISO} {'→'} {data.endISO}
+            </Text>
+
+            <Pressable
+              onPress={downloadPdf}
+              disabled={downloadingPdf}
+              style={[
+                styles.downloadBtn,
+                { backgroundColor: colors.success, opacity: downloadingPdf ? 0.6 : 1 },
+              ]}
+            >
+              {downloadingPdf ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="download-outline" size={14} color="#fff" />
+              )}
+              <Text style={styles.downloadBtnText}>
+                {downloadingPdf ? "Preparing…" : "PDF"}
+              </Text>
+            </Pressable>
+          </View>
 
           {(canApprove || canReject || canPaid) && (
             <View style={styles.actionButtonsContainer}>
@@ -1158,6 +1249,63 @@ export default function AdminTimesheetDetail() {
             </ScrollView>
           )}
         </GlassCard>
+
+        <Modal
+          visible={!!pdfUri}
+          animationType="slide"
+          onRequestClose={() => setPdfUri(null)}
+        >
+          <View style={[styles.pdfModal, { backgroundColor: colors.bgSecondary }]}>
+            <View
+              style={[
+                styles.pdfHeader,
+                { backgroundColor: colors.accent, paddingTop: insets.top + 12 },
+              ]}
+            >
+              <Text style={styles.pdfTitle}>Timesheet PDF</Text>
+              <Pressable style={styles.pdfClose} onPress={() => setPdfUri(null)}>
+                <Ionicons name="close" size={22} color="#fff" />
+              </Pressable>
+            </View>
+            <View style={[styles.pdfActions, { borderBottomColor: colors.border }]}>
+              <Text
+                numberOfLines={1}
+                style={[styles.pdfSavedText, { color: colors.textSecondary }]}
+              >
+                Saved in app: {pdfFilename ?? "timesheet.pdf"}
+              </Text>
+              <Pressable
+                style={[styles.pdfShareButton, { backgroundColor: colors.accent }]}
+                onPress={sharePdf}
+                disabled={sharingPdf}
+              >
+                {sharingPdf ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Ionicons name="share-outline" size={16} color="#fff" />
+                )}
+                <Text style={styles.pdfShareText}>Save / Share</Text>
+              </Pressable>
+            </View>
+            {pdfUri && (
+              <WebView
+                source={{ uri: pdfUri }}
+                style={[styles.pdfViewer, { backgroundColor: colors.bgSecondary }]}
+                originWhitelist={["*"]}
+                allowFileAccess
+                startInLoadingState
+                renderLoading={() => (
+                  <View style={[styles.pdfLoading, { backgroundColor: colors.bgSecondary }]}>
+                    <ActivityIndicator color={colors.accent} />
+                    <Text style={{ color: colors.textSecondary }}>
+                      Loading PDF...
+                    </Text>
+                  </View>
+                )}
+              />
+            )}
+          </View>
+        </Modal>
       </View>
     </AuthStyleBackground>
   );
@@ -1176,7 +1324,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 5,
-    backgroundColor: "#262D68",
+    backgroundColor: "#16A34A",
     flexDirection: "row",
     alignItems: "center",
   },
@@ -1236,7 +1384,7 @@ const styles = StyleSheet.create({
 
   daysCell: {},
   payCell: {},
-  totalRowCell: { backgroundColor: "#262D68" },
+  totalRowCell: { backgroundColor: "#16A34A" },
   totalRowDayCell: { backgroundColor: "#e8e8e8" },
 
   presentCell: {},
@@ -1246,5 +1394,61 @@ const styles = StyleSheet.create({
 
   totalRow: {
     borderTopWidth: 2,
+  },
+
+  headerRow2: {
+    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  downloadBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+  },
+  downloadBtnText: { color: "#fff", fontWeight: "800", fontSize: 12 },
+
+  pdfModal: { flex: 1 },
+  pdfHeader: {
+    // paddingTop is set dynamically from useSafeAreaInsets() above.
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  pdfTitle: { color: "#fff", fontSize: 18, fontWeight: "900" },
+  pdfClose: { padding: 6 },
+  pdfActions: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center",
+    borderBottomWidth: 1,
+  },
+  pdfSavedText: { flex: 1, fontSize: 12, fontWeight: "700" },
+  pdfShareButton: {
+    minWidth: 124,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 9,
+    flexDirection: "row",
+    gap: 6,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pdfShareText: { color: "#fff", fontWeight: "900", fontSize: 12 },
+  pdfViewer: { flex: 1 },
+  pdfLoading: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 10,
   },
 });

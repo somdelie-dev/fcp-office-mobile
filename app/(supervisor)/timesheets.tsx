@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { WebView } from "react-native-webview";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AuthStyleBackground } from "@/components/AuthStyleBackground";
 import { GlassCard } from "@/components/GlassCard";
@@ -33,7 +34,7 @@ import type { TimesheetListRowDto, TimesheetStatus } from "../../lib/apiClient";
 import { apiSupervisorTimesheetsCached } from "../../lib/apiClient";
 import { getApiBase, getToken } from "../../lib/api";
 
-const NAVY = "#262D68";
+const NAVY = "#16A34A";
 
 const themes = {
   dark: {
@@ -43,7 +44,7 @@ const themes = {
     textPrimary: "white",
     textSecondary: "#94a3b8",
     textTertiary: "#cbd5e1",
-    accent: "#38bdf8",
+    accent: "#22c55e",
     error: "#dc2626",
   },
   light: {
@@ -53,7 +54,7 @@ const themes = {
     textPrimary: "#0f172a",
     textSecondary: "#64748b",
     textTertiary: "#475569",
-    accent: "#0ea5e9",
+    accent: "#16A34A",
     error: "#ef4444",
   },
 };
@@ -135,6 +136,7 @@ function statusColor(s: TimesheetStatus) {
 
 export default function SupervisorTimesheets() {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const colors = themes[theme];
   const { supervisorTimesheets, setSupervisorTimesheets, isFresh } =
     useDataCache();
@@ -413,7 +415,7 @@ export default function SupervisorTimesheets() {
         <View
           style={[styles.pdfModal, { backgroundColor: colors.bgSecondary }]}
         >
-          <View style={styles.pdfHeader}>
+          <View style={[styles.pdfHeader, { paddingTop: insets.top + 12 }]}>
             <Text style={styles.pdfTitle}>Timesheet PDF</Text>
             <Pressable style={styles.pdfClose} onPress={() => setPdfUri(null)}>
               <Ionicons name="close" size={22} color="#fff" />
@@ -671,7 +673,7 @@ const styles = StyleSheet.create({
   retryButtonText: { fontSize: 13, fontWeight: "900", color: "#fff" },
   pdfModal: { flex: 1 },
   pdfHeader: {
-    paddingTop: 52,
+    // paddingTop is set dynamically from useSafeAreaInsets() at the call site.
     paddingBottom: 12,
     paddingHorizontal: 16,
     flexDirection: "row",

@@ -1,0 +1,57 @@
+ FACE_RECOGNITION_ROADMAP.md                        |   613 [32m+[m
+ FACE_SCANNER_DOCUMENTATION.md                      |   384 [32m+[m
+ FACE_SCANNER_INDEX.md                              |   486 [32m+[m
+ FACE_SCANNER_QUICKSTART.md                         |   277 [32m+[m
+ FACE_SCANNER_SUMMARY.md                            |   477 [32m+[m
+ FACE_SCANNER_VISUAL_GUIDE.md                       |   469 [32m+[m
+ FACE_VERIFICATION_TECHNICAL_DESIGN.md              |   406 [32m+[m
+ app.json                                           |    10 [32m+[m[31m-[m
+ app/(admin)/home.tsx                               |    35 [32m+[m
+ app/(admin-stack)/attendance-scans.tsx             |   134 [32m+[m
+ app/(admin-stack)/manual-scan.tsx                  |   982 [32m++[m
+ app/(admin-stack)/timesheets/[id].tsx              |    33 [32m+[m[31m-[m
+ app/(foreman-stack)/dev-face-test.tsx              |   209 [32m+[m
+ app/(foreman-stack)/workers/[id].tsx               |   110 [31m-[m
+ .../workers/[id]/enroll-face/index.tsx             |   228 [32m+[m
+ app/(foreman-stack)/workers/[id]/index copy.tsx    |   263 [32m+[m
+ app/(foreman-stack)/workers/[id]/index.ts          |     8 [32m+[m
+ app/(foreman-stack)/workers/[id]/index.tsx         |   265 [32m+[m
+ .../workers/[id]/scan-out-face/index.tsx           |    79 [32m+[m
+ app/(supervisor-stack)/scan.tsx                    |    45 [32m+[m
+ app/(supervisor-stack)/timesheets/[id].tsx         |    29 [32m+[m[31m-[m
+ assets/images/android-icon-background.png          |   Bin [31m76691[m -> [32m22117[m bytes
+ assets/images/android-icon-foreground.png          |   Bin [31m78796[m -> [32m542712[m bytes
+ assets/images/icon.png                             |   Bin [31m393493[m -> [32m1333469[m bytes
+ components/FaceScanner/FaceGuide.tsx               |   266 [32m+[m
+ components/FaceScanner/ScannerOverlay.tsx          |   132 [32m+[m
+ components/FaceScanner/SuccessAnimation.tsx        |   159 [32m+[m
+ components/FaceScanner/index.ts                    |     3 [32m+[m
+ components/FaceVerification/FacePreview.tsx        |   128 [32m+[m
+ components/FaceVerification/GlassPanel.tsx         |    98 [32m+[m
+ components/FaceVerification/Header.tsx             |   135 [32m+[m
+ components/FaceVerification/HeroCard.tsx           |   183 [32m+[m
+ components/FaceVerification/IdentityStatusCard.tsx |   184 [32m+[m
+ components/FaceVerification/PrimaryActions.tsx     |   192 [32m+[m
+ components/FaceVerification/ProfileHeroCard.tsx    |   168 [32m+[m
+ .../FaceVerification/ReferencePhotosCard.tsx       |   232 [32m+[m
+ components/FaceVerification/StatusChip.tsx         |   107 [32m+[m
+ components/FaceVerification/faceTheme.ts           |   209 [32m+[m
+ components/FaceVerification/index.tsx              |    31 [32m+[m
+ components/team/FacePreview.tsx                    |   129 [32m+[m
+ components/team/FaceScreenBackground.tsx           |    83 [32m+[m
+ components/team/GlassPanel.tsx                     |   101 [32m+[m
+ components/team/Header.tsx                         |   125 [32m+[m
+ components/team/HeroCard.tsx                       |   163 [32m+[m
+ components/team/IdentityStatusCard.tsx             |   174 [32m+[m
+ components/team/PrimaryActions.tsx                 |   158 [32m+[m
+ components/team/ReferencePhotosCard.tsx            |   208 [32m+[m
+ components/team/StatusChip.tsx                     |    97 [32m+[m
+ components/team/faceTheme.ts                       |   348 [32m+[m
+ components/team/index.ts                           |     9 [32m+[m
+ lib/api.ts                                         |     3 [32m+[m[31m-[m
+ lib/apiClient.ts                                   |   145 [32m+[m[31m-[m
+ lib/employeesStore.ts                              |    31 [32m+[m[31m-[m
+ package-lock.json                                  | 12437 [32m+++++++++++++++++++[m
+ package.json                                       |     8 [32m+[m[31m-[m
+ pnpm-lock.yaml                                     |    97 [32m+[m[31m-[m
+ 56 files changed, 21939 insertions(+), 146 deletions(-)

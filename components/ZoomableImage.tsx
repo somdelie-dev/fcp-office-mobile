@@ -1,10 +1,6 @@
 import React from "react";
 import { Image, StyleSheet, View, type ImageStyle } from "react-native";
-import {
-  Gesture,
-  GestureDetector,
-  GestureHandlerRootView,
-} from "react-native-gesture-handler";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -100,9 +96,7 @@ export function ZoomableImage({
   }));
 
   return (
-    <GestureHandlerRootView
-      style={{ width, height, overflow: "hidden", borderRadius }}
-    >
+    <View style={{ width, height, overflow: "hidden", borderRadius }}>
       <GestureDetector gesture={composed}>
         <AnimatedImage
           source={{ uri }}
@@ -110,6 +104,6 @@ export function ZoomableImage({
           resizeMode="contain"
         />
       </GestureDetector>
-    </GestureHandlerRootView>
+    </View>
   );
 }

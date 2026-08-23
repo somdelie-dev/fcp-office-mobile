@@ -105,3 +105,11 @@ app-example
 /android
 
 # @end expo-cli
+
+fcp-release.keystore
+
+fcp-production.keystore
+
+*.keystore
+
+android/signing.properties

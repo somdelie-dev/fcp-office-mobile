@@ -739,7 +739,7 @@ const styles = StyleSheet.create({
   },
   retryBtn: {
     marginTop: 16,
-    backgroundColor: "#3b82f6",
+    backgroundColor: "#16A34A",
     paddingHorizontal: 24,
     paddingVertical: 10,
     borderRadius: 8,

@@ -312,7 +312,7 @@ export default function SupervisorSiteDetailScreen() {
             </Pressable>
 
             <Pressable
-              style={[styles.pill, { backgroundColor: "#262D68" }]}
+              style={[styles.pill, { backgroundColor: "#16A34A" }]}
               onPress={() => refresh("load")}
             >
               <Text style={styles.pillTxt}>Retry</Text>
@@ -656,7 +656,7 @@ export default function SupervisorSiteDetailScreen() {
                                 ? "rgba(255,255,255,0.04)"
                                 : "rgba(0,0,0,0.02)",
                             borderColor: isSelected
-                              ? "#3b82f6"
+                              ? "#22c55e"
                               : isDark
                                 ? "#334155"
                                 : "#e2e8f0",
@@ -709,10 +709,10 @@ export default function SupervisorSiteDetailScreen() {
                             styles.checkbox,
                             {
                               backgroundColor: isSelected
-                                ? "#3b82f6"
+                                ? "#22c55e"
                                 : "transparent",
                               borderColor: isSelected
-                                ? "#3b82f6"
+                                ? "#22c55e"
                                 : isDark
                                   ? "#475569"
                                   : "#cbd5e1",
@@ -738,7 +738,7 @@ export default function SupervisorSiteDetailScreen() {
                     styles.assignButton,
                     {
                       backgroundColor:
-                        selectedForemen.size === 0 ? "#94a3b8" : "#3b82f6",
+                        selectedForemen.size === 0 ? "#94a3b8" : "#22c55e",
                       opacity: busy ? 0.6 : 1,
                     },
                   ]}
@@ -875,7 +875,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 6,
-    backgroundColor: "#262D68",
+    backgroundColor: "#16A34A",
     alignSelf: "flex-start",
   },
   actionTxt: { fontWeight: "900", color: "#fff" },

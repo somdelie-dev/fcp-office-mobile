@@ -72,7 +72,7 @@ export default function ForemanWorkers() {
             style={{
               flexDirection: "row",
               alignItems: "center",
-              backgroundColor: "#262D68",
+              backgroundColor: "#16A34A",
               paddingHorizontal: 14,
               paddingVertical: 8,
               borderRadius: 20,

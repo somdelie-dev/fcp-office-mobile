@@ -1,6 +1,6 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FlatList,
   Pressable,
@@ -15,7 +15,10 @@ import { AuthStyleBackground } from "@/components/AuthStyleBackground";
 import { GlassCard } from "@/components/GlassCard";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import {
+  apiAdminListUsers,
   apiAdminTimesheets,
+  type AdminTimesheetsPeriodDto,
+  type AdminUserListItemDto,
   type TimesheetListRowDto,
   type TimesheetStatus,
 } from "@/lib/apiClient";
@@ -23,7 +26,9 @@ import { formatCurrency } from "@/lib/formatCurrency";
 import { useTheme } from "@/lib/themeContext";
 import { Ionicons } from "@expo/vector-icons";
 
-const NAVY = "#262D68";
+// Face Scan green accent, kept as a module constant so the plain (non-hook)
+// StyleSheet entries below can reference it too.
+const NAVY = "#16A34A";
 
 const themes = {
   dark: {
@@ -33,7 +38,7 @@ const themes = {
     textPrimary: "white",
     textSecondary: "#94a3b8",
     textTertiary: "#cbd5e1",
-    accent: "#38bdf8",
+    accent: "#22c55e",
     error: "#dc2626",
   },
   light: {
@@ -43,7 +48,7 @@ const themes = {
     textPrimary: "#0f172a",
     textSecondary: "#64748b",
     textTertiary: "#475569",
-    accent: "#0ea5e9",
+    accent: "#16A34A",
     error: "#ef4444",
   },
 };
@@ -59,6 +64,12 @@ function todayLabel() {
 
 function iso10(v: any) {
   return String(v ?? "").slice(0, 10);
+}
+
+function addDaysISO(iso: string, days: number): string {
+  const d = new Date(`${iso10(iso)}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 function formatDateRange(startISO: string, endISO: string): string {
@@ -119,6 +130,24 @@ export default function AdminTimesheetsScreen() {
     "ALL",
   );
 
+  // Period navigation: undefined = let the server resolve "current".
+  const [periodOverride, setPeriodOverride] = useState<string | undefined>();
+  const [activePeriod, setActivePeriod] = useState<AdminTimesheetsPeriodDto | null>(
+    null,
+  );
+
+  const [supervisors, setSupervisors] = useState<AdminUserListItemDto[]>([]);
+  const [selectedSupervisorId, setSelectedSupervisorId] = useState<
+    string | "ALL"
+  >("ALL");
+  const [supervisorPickerOpen, setSupervisorPickerOpen] = useState(false);
+
+  useEffect(() => {
+    apiAdminListUsers("SUPERVISOR")
+      .then((res) => setSupervisors(res.users ?? []))
+      .catch(() => setSupervisors([]));
+  }, []);
+
   // Debounce search
   React.useEffect(() => {
     const id = setTimeout(() => {
@@ -134,16 +163,42 @@ export default function AdminTimesheetsScreen() {
       const res = await apiAdminTimesheets({
         q: debouncedSearch || undefined,
         status: selectedStatus === "ALL" ? undefined : selectedStatus,
+        period: periodOverride,
+        supervisorId:
+          selectedSupervisorId === "ALL" ? undefined : selectedSupervisorId,
         limit: 100,
       });
       setTimesheets(res.timesheets ?? []);
+      if (res.period) setActivePeriod(res.period);
     } catch (e: any) {
       setError(e?.message ?? "Failed to load timesheets");
       setTimesheets([]);
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, selectedStatus]);
+  }, [debouncedSearch, selectedStatus, periodOverride, selectedSupervisorId]);
+
+  const goToPeriod = useCallback(
+    (direction: -1 | 1) => {
+      if (!activePeriod) return;
+      const startISO = addDaysISO(activePeriod.startISO, direction * 14);
+      const endISO = addDaysISO(activePeriod.endISO, direction * 14);
+      setPeriodOverride(`${startISO}_${endISO}`);
+    },
+    [activePeriod],
+  );
+
+  const goToCurrentPeriod = useCallback(() => {
+    setPeriodOverride(undefined);
+  }, []);
+
+  const selectedSupervisorLabel = useMemo(() => {
+    if (selectedSupervisorId === "ALL") return "All supervisors";
+    return (
+      supervisors.find((s) => s.id === selectedSupervisorId)?.name ??
+      "All supervisors"
+    );
+  }, [selectedSupervisorId, supervisors]);
 
   React.useEffect(() => {
     loadTimesheets();
@@ -190,6 +245,106 @@ export default function AdminTimesheetsScreen() {
         </GlassCard>
 
         <GlassCard style={styles.filterCard}>
+          {activePeriod && (
+            <View style={styles.periodRow}>
+              <Pressable
+                onPress={() => goToPeriod(-1)}
+                style={[
+                  styles.periodNavBtn,
+                  { backgroundColor: colors.bgSecondary, borderColor: colors.border },
+                ]}
+              >
+                <Ionicons name="chevron-back" size={16} color={colors.textPrimary} />
+              </Pressable>
+
+              <Pressable
+                onPress={goToCurrentPeriod}
+                style={styles.periodLabelWrap}
+              >
+                <Text style={[styles.periodLabel, { color: colors.textPrimary }]}>
+                  {formatDateRange(activePeriod.startISO, activePeriod.endISO)}
+                </Text>
+                {periodOverride && (
+                  <Text style={[styles.periodBackToToday, { color: NAVY }]}>
+                    Jump to current
+                  </Text>
+                )}
+              </Pressable>
+
+              <Pressable
+                onPress={() => goToPeriod(1)}
+                style={[
+                  styles.periodNavBtn,
+                  { backgroundColor: colors.bgSecondary, borderColor: colors.border },
+                ]}
+              >
+                <Ionicons name="chevron-forward" size={16} color={colors.textPrimary} />
+              </Pressable>
+            </View>
+          )}
+
+          <Pressable
+            onPress={() => setSupervisorPickerOpen((v) => !v)}
+            style={[
+              styles.supervisorTrigger,
+              { backgroundColor: colors.bgSecondary, borderColor: colors.border },
+            ]}
+          >
+            <Ionicons name="people-outline" size={16} color={colors.textSecondary} />
+            <Text
+              style={[styles.supervisorTriggerText, { color: colors.textPrimary }]}
+              numberOfLines={1}
+            >
+              {selectedSupervisorLabel}
+            </Text>
+            <Ionicons
+              name={supervisorPickerOpen ? "chevron-up" : "chevron-down"}
+              size={16}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+
+          {supervisorPickerOpen && (
+            <View
+              style={[
+                styles.supervisorDropdown,
+                { backgroundColor: colors.bgSecondary, borderColor: colors.border },
+              ]}
+            >
+              <ScrollView
+                style={{ maxHeight: 240 }}
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+              >
+                <Pressable
+                  style={styles.supervisorOption}
+                  onPress={() => {
+                    setSelectedSupervisorId("ALL");
+                    setSupervisorPickerOpen(false);
+                  }}
+                >
+                  <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
+                    All supervisors
+                  </Text>
+                </Pressable>
+                {supervisors.map((s) => (
+                  <Pressable
+                    key={s.id}
+                    style={styles.supervisorOption}
+                    onPress={() => {
+                      setSelectedSupervisorId(s.id);
+                      setSupervisorPickerOpen(false);
+                    }}
+                  >
+                    <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
+                      {s.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
           <View
             style={[
               styles.searchBox,
@@ -452,6 +607,49 @@ const styles = StyleSheet.create({
   h1: { fontSize: 20, fontWeight: "900" },
   sub: { marginTop: 6, fontWeight: "800", fontSize: 13 },
   adminNote: { marginTop: 4, fontWeight: "700", fontSize: 12 },
+
+  periodRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+    gap: 8,
+  },
+  periodNavBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  periodLabelWrap: { flex: 1, alignItems: "center" },
+  periodLabel: { fontSize: 14, fontWeight: "900" },
+  periodBackToToday: { fontSize: 11, fontWeight: "800", marginTop: 2 },
+
+  supervisorTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  supervisorTriggerText: { flex: 1, fontSize: 13, fontWeight: "700" },
+  supervisorDropdown: {
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 12,
+    overflow: "hidden",
+  },
+  supervisorOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(148,163,184,0.15)",
+  },
 
   searchBox: {
     flexDirection: "row",

@@ -350,7 +350,7 @@ function SiteRow({
         <Pressable
           onPress={(e) => { e.stopPropagation?.(); setActionsId(isOpen ? null : item.id); }}
           style={[styles.actionsBtn, {
-            backgroundColor: isOpen ? (isDark ? "rgba(56,189,248,0.15)" : "rgba(14,165,233,0.1)") : "transparent",
+            backgroundColor: isOpen ? (isDark ? "rgba(34,197,94,0.15)" : "rgba(22,163,74,0.1)") : "transparent",
             borderColor: isDark ? "#334155" : "#e2e8f0",
           }]}
         >
@@ -363,10 +363,10 @@ function SiteRow({
             borderColor: isDark ? "#334155" : "#e2e8f0",
           }]}>
             <Pressable
-              style={({ pressed }) => [styles.dropdownItem, { backgroundColor: pressed ? (isDark ? "rgba(56,189,248,0.1)" : "rgba(14,165,233,0.06)") : "transparent" }]}
+              style={({ pressed }) => [styles.dropdownItem, { backgroundColor: pressed ? (isDark ? "rgba(34,197,94,0.1)" : "rgba(22,163,74,0.06)") : "transparent" }]}
               onPress={() => { setActionsId(null); onManage(); }}
             >
-              <Ionicons name="arrow-forward" size={15} color={isDark ? "#38bdf8" : "#0ea5e9"} />
+              <Ionicons name="arrow-forward" size={15} color={isDark ? "#22c55e" : "#16A34A"} />
               <Text style={[styles.dropdownText, { color: isDark ? "#e5e7eb" : "#111827" }]}>Manage</Text>
             </Pressable>
             <View style={[styles.divider, { backgroundColor: isDark ? "#1f2937" : "#e5e7eb" }]} />
@@ -422,12 +422,12 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 15, fontWeight: "900" },
   emptySub: { fontSize: 12, fontWeight: "700", textAlign: "center" },
   pill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
-  pillActive: { backgroundColor: "#bfdbfe", borderColor: "#60a5fa" },
+  pillActive: { backgroundColor: "#bbf7d0", borderColor: "#4ade80" },
   pillInactive: { backgroundColor: "rgba(255,255,255,0.7)", borderColor: "rgba(148,163,184,0.6)" },
-  pillActiveDark: { backgroundColor: "rgba(56,189,248,0.22)", borderColor: "rgba(56,189,248,0.7)" },
+  pillActiveDark: { backgroundColor: "rgba(34,197,94,0.22)", borderColor: "rgba(34,197,94,0.7)" },
   pillInactiveDark: { backgroundColor: "rgba(15,23,42,0.9)", borderColor: "rgba(51,65,85,0.9)" },
   pillText: { fontSize: 11, fontWeight: "800" },
-  addBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: "#262D68" },
+  addBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: "#16A34A" },
   addBtnText: { color: "#fff", fontWeight: "900", fontSize: 12 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", padding: 16 },
   modalCard: { width: "100%", maxWidth: 420, borderRadius: 16, padding: 16 },
@@ -438,6 +438,6 @@ const styles = StyleSheet.create({
   modalBtns: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 14 },
   cancelBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999 },
   cancelBtnText: { fontSize: 13, fontWeight: "800" },
-  saveBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: "#262D68" },
+  saveBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: "#16A34A" },
   saveBtnText: { fontSize: 13, fontWeight: "900", color: "#fff" },
 });

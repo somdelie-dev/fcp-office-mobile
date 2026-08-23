@@ -17,15 +17,17 @@
         "simulator": false
       }
     },
-    "production": {
-      "autoIncrement": true,
-      "android": {
-        "buildType": "app-bundle"
-      },
-      "ios": {
-        "distribution": "store"
-      }
-    }
+  "production": {
+  "autoIncrement": true,
+  "pnpm": "10.28.1",
+  "android": {
+    "buildType": "app-bundle"
+  },
+  "ios": {
+    "distribution": "store",
+    "image": "macos-sequoia-15.6-xcode-26.2"
+  }
+}
   },
   "submit": {
     "production": {

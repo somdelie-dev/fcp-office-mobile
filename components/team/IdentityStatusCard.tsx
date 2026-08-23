@@ -85,7 +85,7 @@ export default function IdentityStatusCard({
   verificationStatus = "verified",
   workerStatus = "active",
 }: IdentityStatusCardProps) {
-  const { colors, typography, radius, spacing } = useFaceTheme();
+  const { colors, typography, spacing } = useFaceTheme();
   const verification = VERIFICATION_COPY[verificationStatus];
 
   const rows: StatusRowData[] = [
@@ -113,7 +113,7 @@ export default function IdentityStatusCard({
   ];
 
   return (
-    <GlassPanel radius={radius.xl}>
+    <GlassPanel radius={5}>
       <Text style={[typography.headline, { marginBottom: spacing.md }]}>
         Identity Status
       </Text>
@@ -136,7 +136,7 @@ export default function IdentityStatusCard({
                 style={[
                   styles.iconWrap,
                   {
-                    borderRadius: radius.sm,
+                    borderRadius: 5,
                     backgroundColor: colors.glassFill,
                     borderColor: colors.glassBorder,
                   },

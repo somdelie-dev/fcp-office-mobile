@@ -151,7 +151,7 @@ export default function NotificationsScreen() {
 
       {loading && notifications.length === 0 ? (
         <View style={styles.center}>
-          <ActivityIndicator color="#3b82f6" />
+          <ActivityIndicator color="#22c55e" />
         </View>
       ) : notifications.length === 0 ? (
         <View style={styles.center}>
@@ -169,7 +169,7 @@ export default function NotificationsScreen() {
           data={notifications}
           keyExtractor={(n) => n.id}
           refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={refresh} tintColor="#3b82f6" />
+            <RefreshControl refreshing={loading} onRefresh={refresh} tintColor="#22c55e" />
           }
           contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
           ItemSeparatorComponent={() => (
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
   },
   backBtn: { width: 32 },
   headerTitle: { fontSize: 17, fontWeight: "700" },
-  markAllText: { fontSize: 13, color: "#3b82f6", fontWeight: "600" },
+  markAllText: { fontSize: 13, color: "#22c55e", fontWeight: "600" },
   center: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
   emptyText: { fontSize: 15 },
   item: {

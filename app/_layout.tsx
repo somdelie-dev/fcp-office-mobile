@@ -1,9 +1,11 @@
 import { Redirect, Stack, useRouter } from "expo-router";
 import React, { useEffect } from "react";
 import { Platform } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { OfflineBanner } from "../components/OfflineStatus";
+import { UpdateGate } from "../components/UpdateGate";
 import { AuthProvider, useAuth } from "../lib/auth";
 import { DataCacheProvider } from "../lib/dataCache";
 import { NetworkStatusListener } from "../lib/networkMonitor";
@@ -89,41 +91,44 @@ export default function RootLayout() {
   const showOfflineBanner = Platform.OS !== "web";
 
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <AuthProvider>
-          <DataCacheProvider>
-            <NotificationNavigator />
-            <NetworkStatusListener />
-            {showOfflineBanner ? <OfflineBanner /> : null}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <DataCacheProvider>
+              <NotificationNavigator />
+              <NetworkStatusListener />
+              <UpdateGate />
+              {showOfflineBanner ? <OfflineBanner /> : null}
 
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                headerStyle: { backgroundColor: "#334155" },
-                headerTitle: "",
-                headerShadowVisible: false,
-              }}
-            >
-              {/* Gate is the default route controller */}
-              <Stack.Screen name="index" options={{ headerShown: false }} />
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  headerStyle: { backgroundColor: "#334155" },
+                  headerTitle: "",
+                  headerShadowVisible: false,
+                }}
+              >
+                {/* Gate is the default route controller */}
+                <Stack.Screen name="index" options={{ headerShown: false }} />
 
-              {/* Public */}
-              <Stack.Screen
-                name="login"
-                options={{ gestureEnabled: false, animation: "fade" }}
-              />
+                {/* Public */}
+                <Stack.Screen
+                  name="login"
+                  options={{ gestureEnabled: false, animation: "fade" }}
+                />
 
-              {/* Role stacks */}
-              <Stack.Screen name="(foreman)" />
-              <Stack.Screen name="(supervisor)" />
-              <Stack.Screen name="(admin)" />
-              <Stack.Screen name="(admin-stack)" />
-              <Stack.Screen name="(assistant)" />
-            </Stack>
-          </DataCacheProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </SafeAreaProvider>
+                {/* Role stacks */}
+                <Stack.Screen name="(foreman)" />
+                <Stack.Screen name="(supervisor)" />
+                <Stack.Screen name="(admin)" />
+                <Stack.Screen name="(admin-stack)" />
+                <Stack.Screen name="(assistant)" />
+              </Stack>
+            </DataCacheProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

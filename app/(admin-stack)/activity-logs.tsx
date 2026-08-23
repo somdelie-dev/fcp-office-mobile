@@ -130,7 +130,7 @@ function RecentLoginRow({
         {isLogin ? (
           <LogIn size={16} color="#10b981" strokeWidth={2.2} />
         ) : (
-          <Globe size={16} color="#3b82f6" strokeWidth={2.2} />
+          <Globe size={16} color="#22c55e" strokeWidth={2.2} />
         )}
         <Text
           style={[styles.loginName, { color: colors.textPrimary }]}
@@ -421,13 +421,13 @@ export default function ActivityLogsScreen() {
                 <Ionicons
                   name="funnel-outline"
                   size={16}
-                  color={actionFilter ? "#3b82f6" : colors.textSecondary}
+                  color={actionFilter ? "#22c55e" : colors.textSecondary}
                 />
                 <Text
                   style={[
                     styles.filterBtnText,
                     {
-                      color: actionFilter ? "#3b82f6" : colors.textSecondary,
+                      color: actionFilter ? "#22c55e" : colors.textSecondary,
                     },
                   ]}
                   numberOfLines={1}
@@ -446,7 +446,7 @@ export default function ActivityLogsScreen() {
                 ]}
                 onPress={doSearch}
               >
-                <Search size={16} color="#3b82f6" />
+                <Search size={16} color="#22c55e" />
               </Pressable>
             </View>
           </View>
@@ -454,7 +454,7 @@ export default function ActivityLogsScreen() {
           {/* Results */}
           {loading ? (
             <View style={styles.emptyContainer}>
-              <ActivityIndicator size="large" color="#3b82f6" />
+              <ActivityIndicator size="large" color="#22c55e" />
             </View>
           ) : logs.length === 0 ? (
             <View style={styles.emptyContainer}>
@@ -567,7 +567,7 @@ export default function ActivityLogsScreen() {
                   All actions
                 </Text>
                 {!actionFilter && (
-                  <Ionicons name="checkmark" size={18} color="#3b82f6" />
+                  <Ionicons name="checkmark" size={18} color="#22c55e" />
                 )}
               </Pressable>
               {actions.map((a) => (
@@ -603,7 +603,7 @@ export default function ActivityLogsScreen() {
                     {a}
                   </Text>
                   {actionFilter === a && (
-                    <Ionicons name="checkmark" size={18} color="#3b82f6" />
+                    <Ionicons name="checkmark" size={18} color="#22c55e" />
                   )}
                 </Pressable>
               ))}

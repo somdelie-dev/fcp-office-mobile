@@ -7,7 +7,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
-import { FaceScreenBackground, Header } from "@/components/team";
+import { Avatar, CornerBrackets, FaceScreenBackground, Header } from "@/components/team";
 import FacePreview from "@/components/team/FacePreview";
 import GlassPanel from "@/components/team/GlassPanel";
 import { FaceTheme, useFaceTheme } from "@/components/team/faceTheme";
@@ -42,6 +42,7 @@ interface Outcome {
   kind: OutcomeKind;
   confidence: number | null;
   message?: string;
+  completedAtISO: string;
 }
 
 const ALIGN_DURATION = 2200;
@@ -194,29 +195,6 @@ function PrimaryButton({
   );
 }
 
-function CornerBrackets({ size, color }: { size: number; color: string }) {
-  const len = size * 0.16;
-  const inset = size * 0.06;
-  return (
-    <View style={[StyleSheet.absoluteFillObject, { alignItems: "center", justifyContent: "center" }]} pointerEvents="none">
-      <View style={{ width: size + inset * 2, height: size + inset * 2 }}>
-        {/* top-left */}
-        <View style={[bracketStyles.corner, { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderColor: color, width: len, height: len, borderTopLeftRadius: 10 }]} />
-        {/* top-right */}
-        <View style={[bracketStyles.corner, { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderColor: color, width: len, height: len, borderTopRightRadius: 10 }]} />
-        {/* bottom-left */}
-        <View style={[bracketStyles.corner, { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderColor: color, width: len, height: len, borderBottomLeftRadius: 10 }]} />
-        {/* bottom-right */}
-        <View style={[bracketStyles.corner, { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderColor: color, width: len, height: len, borderBottomRightRadius: 10 }]} />
-      </View>
-    </View>
-  );
-}
-
-const bracketStyles = StyleSheet.create({
-  corner: { position: "absolute" },
-});
-
 function FaceCameraStage({
   cameraRef,
   tone,
@@ -227,16 +205,13 @@ function FaceCameraStage({
   onReady?: () => void;
 }) {
   const { colors } = useFaceTheme();
-  const ringColor = tone === "detected" ? colors.success : tone === "noFace" ? colors.danger : colors.primary;
+  // "scanning" also reads success-green, not primary blue — this whole flow
+  // is styled around the green "clock out" identity end to end.
+  const ringColor = tone === "noFace" ? colors.danger : colors.success;
 
   return (
     <View style={styles.stageWrap}>
-      <View
-        style={[
-          styles.stageGlow,
-          { shadowColor: tone === "detected" ? colors.success : colors.primary },
-        ]}
-      />
+      <View style={[styles.stageGlow, { shadowColor: ringColor }]} />
       <View style={[styles.stageCircle, { backgroundColor: colors.backgroundDeep, borderColor: colors.glassBorderStrong }]}>
         <CameraView ref={cameraRef} style={StyleSheet.absoluteFillObject} facing="front" onCameraReady={onReady} />
       </View>
@@ -245,10 +220,53 @@ function FaceCameraStage({
   );
 }
 
+function SelectedWorkerCard({
+  employee,
+  scannedInAtISO,
+}: {
+  employee: EmployeeDto | null;
+  scannedInAtISO?: string;
+}) {
+  const { colors, typography, spacing } = useFaceTheme();
+  if (!employee) return null;
+
+  return (
+    <GlassPanel contentPadding={12} style={{ width: "100%", marginBottom: spacing.md }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+        <Avatar uri={employee.faceImageUrl} name={employee.fullName} size={40} ringColor={colors.success} />
+        <View style={{ flex: 1 }}>
+          <Text style={[typography.caption, { textTransform: "uppercase", letterSpacing: 0.6 }]}>
+            Selected Worker
+          </Text>
+          <Text style={typography.bodyStrong} numberOfLines={1}>
+            {employee.fullName}
+          </Text>
+          {!!scannedInAtISO && (
+            <Text style={[typography.caption, { marginTop: 1 }]}>
+              Scanned in{" "}
+              {new Date(scannedInAtISO).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
+            </Text>
+          )}
+        </View>
+      </View>
+    </GlassPanel>
+  );
+}
+
 function CapturedPreviewStage({ uri }: { uri: string }) {
   return (
     <View style={styles.stageWrap}>
       <FacePreview photoUri={uri} size={CAMERA_STAGE_SIZE - 40} />
+    </View>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  const { colors, typography } = useFaceTheme();
+  return (
+    <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+      <Text style={typography.caption}>{label}</Text>
+      <Text style={[typography.caption, { color: colors.textPrimary, fontWeight: "700" }]}>{value}</Text>
     </View>
   );
 }
@@ -276,8 +294,9 @@ function ProgressBar({ label, value, progress }: { label: string; value: string;
 export default function VerifyFaceScreen() {
   // See workers/[id]/index.tsx — coerce to a stable string so the effect
   // below doesn't re-fire on every render.
-  const params = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; scannedInAtISO?: string }>();
   const id = String(params.id ?? "");
+  const scannedInAtISO = params.scannedInAtISO;
   const { colors, typography, radius, spacing } = useFaceTheme();
 
   const [permission, requestPermission] = useCameraPermissions();
@@ -362,7 +381,12 @@ export default function VerifyFaceScreen() {
         void runVerification(photo.base64 ?? null);
       } catch (e: any) {
         if (cancelled) return;
-        setOutcome({ kind: "error", confidence: null, message: e?.message ?? "Could not capture a photo." });
+        setOutcome({
+          kind: "error",
+          confidence: null,
+          message: e?.message ?? "Could not capture a photo.",
+          completedAtISO: new Date().toISOString(),
+        });
         setStep("outcome");
       }
     }, CAPTURE_DELAY);
@@ -432,9 +456,14 @@ export default function VerifyFaceScreen() {
             ? res.warnings.map(describeQualityWarning).join(", ")
             : undefined;
 
-        setOutcome({ kind, confidence: res.confidence, message });
+        setOutcome({ kind, confidence: res.confidence, message, completedAtISO: new Date().toISOString() });
       } catch (e: any) {
-        setOutcome({ kind: "error", confidence: null, message: e?.message ?? "Verification failed. Please try again." });
+        setOutcome({
+          kind: "error",
+          confidence: null,
+          message: e?.message ?? "Verification failed. Please try again.",
+          completedAtISO: new Date().toISOString(),
+        });
       } finally {
         setStep("outcome");
       }
@@ -531,20 +560,22 @@ export default function VerifyFaceScreen() {
               </Text>
             )}
 
-            <PrimaryButton label="CONTINUE" onPress={handleContinue} />
+            <PrimaryButton label="CONTINUE" tone="success" onPress={handleContinue} />
           </View>
         )}
 
         {step === "align" && (
           <View style={styles.stageScreen}>
+            <SelectedWorkerCard employee={employee} scannedInAtISO={scannedInAtISO} />
             <FaceCameraStage cameraRef={cameraRef} tone="scanning" />
             <Text style={[typography.bodyStrong, { marginTop: spacing.xl }]}>Position your face inside the frame</Text>
-            <Text style={[typography.caption, { marginTop: spacing.xxs, color: colors.primary }]}>Looking for face…</Text>
+            <Text style={[typography.caption, { marginTop: spacing.xxs, color: colors.success }]}>Looking for face…</Text>
           </View>
         )}
 
         {step === "detected" && (
           <View style={styles.stageScreen}>
+            <SelectedWorkerCard employee={employee} scannedInAtISO={scannedInAtISO} />
             <FaceCameraStage cameraRef={cameraRef} tone="detected" />
             <Text style={[typography.bodyStrong, { marginTop: spacing.xl, color: colors.success }]}>
               Great! Face detected
@@ -558,19 +589,21 @@ export default function VerifyFaceScreen() {
 
         {step === "noFace" && (
           <View style={styles.stageScreen}>
+            <SelectedWorkerCard employee={employee} scannedInAtISO={scannedInAtISO} />
             <FaceCameraStage cameraRef={cameraRef} tone="noFace" />
             <Text style={[typography.bodyStrong, { marginTop: spacing.xl, color: colors.danger }]}>No face detected</Text>
             <Text style={[typography.caption, { marginTop: spacing.xxs, textAlign: "center" }]}>
               Make sure your face is clearly visible and well lit
             </Text>
             <View style={{ width: "100%", marginTop: spacing.lg }}>
-              <PrimaryButton label="TRY AGAIN" onPress={handleRetryNoFace} />
+              <PrimaryButton label="TRY AGAIN" tone="success" onPress={handleRetryNoFace} />
             </View>
           </View>
         )}
 
         {step === "verifying" && (
           <View style={styles.stageScreen}>
+            <SelectedWorkerCard employee={employee} scannedInAtISO={scannedInAtISO} />
             {capturedUri ? <CapturedPreviewStage uri={capturedUri} /> : null}
 
             <GlassPanel radius={radius.xl} style={{ width: "100%", marginTop: spacing.xl }}>
@@ -592,6 +625,7 @@ export default function VerifyFaceScreen() {
           <OutcomeStage
             outcome={outcome}
             employeeName={employee?.fullName}
+            employeePhotoUrl={employee?.faceImageUrl}
             onDone={handleDone}
             onRetry={handleRetry}
           />
@@ -604,11 +638,13 @@ export default function VerifyFaceScreen() {
 function OutcomeStage({
   outcome,
   employeeName,
+  employeePhotoUrl,
   onDone,
   onRetry,
 }: {
   outcome: Outcome;
   employeeName?: string;
+  employeePhotoUrl?: string | null;
   onDone: () => void;
   onRetry: () => void;
 }) {
@@ -664,10 +700,15 @@ function OutcomeStage({
   }[outcome.kind];
 
   const Icon = config.Icon;
+  const completedAt = new Date(outcome.completedAtISO);
 
   return (
     <View style={styles.stageScreen}>
-      <View style={[styles.outcomeIconGlow, { shadowColor: config.color }]}>
+      {employeeName && outcome.kind !== "error" && (
+        <Avatar uri={employeePhotoUrl} name={employeeName} size={56} ringColor={config.color} />
+      )}
+
+      <View style={[styles.outcomeIconGlow, { marginTop: spacing.md, shadowColor: config.color }]}>
         <Icon color={config.color} />
       </View>
 
@@ -682,6 +723,19 @@ function OutcomeStage({
           <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
             <CalendarCheckIcon color={config.color} />
             <Text style={[typography.bodyStrong, { flex: 1 }]}>Attendance Recorded</Text>
+          </View>
+
+          <View style={{ marginTop: spacing.md, gap: spacing.xs }}>
+            <DetailRow label="Action" value="Clock Out" />
+            <DetailRow
+              label="Time"
+              value={completedAt.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" })}
+            />
+            <DetailRow label="Date" value={completedAt.toLocaleDateString("en-ZA")} />
+            <DetailRow label="Method" value="Face Scan" />
+            {outcome.confidence != null && (
+              <DetailRow label="Match Score" value={`${Math.round(outcome.confidence * 100)}%`} />
+            )}
           </View>
         </GlassPanel>
       )}

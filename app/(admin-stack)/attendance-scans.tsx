@@ -287,7 +287,7 @@ function ScanDetailModal({
                   label="Overtime"
                   value={overtimeLabel}
                   colors={colors}
-                  valueColor="#3b82f6"
+                  valueColor="#22c55e"
                 />
               )}
               {scan.address && (
@@ -499,12 +499,12 @@ function ScanRow({
             <Ionicons
               name={isManual ? "person-add" : "qr-code"}
               size={10}
-              color={isManual ? "#6b7280" : "#3b82f6"}
+              color={isManual ? "#6b7280" : "#22c55e"}
             />
             <Text
               style={[
                 styles.scanTypeText,
-                { color: isManual ? "#6b7280" : "#3b82f6" },
+                { color: isManual ? "#6b7280" : "#22c55e" },
               ]}
             >
               {isManual ? "Manual" : "QR"}
@@ -546,7 +546,7 @@ function ScanRow({
         ) : null}
         {hasLocation ? (
           <Pressable onPress={openMap} style={styles.locationRow}>
-            <Ionicons name="location" size={10} color="#3b82f6" />
+            <Ionicons name="location" size={10} color="#22c55e" />
             <Text style={styles.locationLink} numberOfLines={1}>
               {item.address ? item.address : "View map"}
             </Text>
@@ -705,7 +705,7 @@ export default function AttendanceScansScreen() {
                   styles.filterChip,
                   {
                     backgroundColor: !filterSite
-                      ? "#3b82f6"
+                      ? "#22c55e"
                       : isDark
                         ? "rgba(255,255,255,0.08)"
                         : "rgba(0,0,0,0.06)",
@@ -730,7 +730,7 @@ export default function AttendanceScansScreen() {
                     {
                       backgroundColor:
                         filterSite?.id === site.id
-                          ? "#3b82f6"
+                          ? "#22c55e"
                           : isDark
                             ? "rgba(255,255,255,0.08)"
                             : "rgba(0,0,0,0.06)",
@@ -907,7 +907,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   overtimeBadge: {
-    backgroundColor: "#3b82f6",
+    backgroundColor: "#22c55e",
     paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 4,
@@ -938,7 +938,7 @@ const styles = StyleSheet.create({
   },
   locationLink: {
     fontSize: 10,
-    color: "#3b82f6",
+    color: "#22c55e",
     fontWeight: "600",
     flexShrink: 1,
   },
@@ -957,7 +957,7 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 16, textAlign: "center", marginTop: 12 },
   retryBtn: {
     marginTop: 16,
-    backgroundColor: "#3b82f6",
+    backgroundColor: "#22c55e",
     paddingHorizontal: 24,
     paddingVertical: 10,
     borderRadius: 8,
@@ -1049,7 +1049,7 @@ const modalStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#3b82f6",
+    backgroundColor: "#22c55e",
     paddingVertical: 12,
     borderRadius: 12,
     gap: 8,

@@ -98,20 +98,20 @@ export default function SupervisorScanScreen() {
       textSecondary: "#94a3b8",
       border: "rgba(148,163,184,0.15)",
       cardBg: "rgba(15,23,42,0.85)",
-      accent: "#38bdf8",
+      accent: "#22c55e",
       ok: "#22c55e",
       error: "#ef4444",
-      accentBg: "rgba(56,189,248,0.12)",
+      accentBg: "rgba(34,197,94,0.12)",
     };
     const light = {
       textPrimary: "#0f172a",
       textSecondary: "#64748b",
       border: "rgba(0,0,0,0.08)",
       cardBg: "rgba(255,255,255,0.85)",
-      accent: "#262D68",
+      accent: "#16A34A",
       ok: "#16a34a",
       error: "#dc2626",
-      accentBg: "rgba(38,45,104,0.08)",
+      accentBg: "rgba(34,197,94,0.08)",
     };
     return theme === "dark" ? dark : light;
   }, [theme]);
@@ -402,7 +402,7 @@ export default function SupervisorScanScreen() {
       const code = normalizeEmployeeCode(codeRaw);
       if (!code) {
         playErr();
-        setError("Not a valid employee QR payload.");
+        setError("Not a valid team member QR payload.");
         return;
       }
 
@@ -444,7 +444,7 @@ export default function SupervisorScanScreen() {
       const code = extractEmployeeCode(payload);
       if (!code) {
         playErr();
-        setError("⚠️ Not a valid employee QR payload.");
+        setError("⚠️ Not a valid team member QR payload.");
         return;
       }
       addToBatch(code);
@@ -619,16 +619,23 @@ export default function SupervisorScanScreen() {
           </View>
 
           {requiresSupervisorAuth ? (
-            <Text style={{ color: colors.error, fontWeight: "800", fontSize: 12 }}>
-              🔒 This site requires your fingerprint before submitting manual attendance.
+            <Text
+              style={{ color: colors.error, fontWeight: "800", fontSize: 12 }}
+            >
+              🔒 This site requires your fingerprint before submitting manual
+              attendance.
             </Text>
           ) : null}
 
           <View style={styles.dateHeader}>
-            <Text style={[styles.selectorLabel, { color: colors.textSecondary }]}>
+            <Text
+              style={[styles.selectorLabel, { color: colors.textSecondary }]}
+            >
               Work date{selectedDates.length > 1 ? "s" : ""}
             </Text>
-            <Text style={[styles.selectedDateText, { color: colors.textPrimary }]}>
+            <Text
+              style={[styles.selectedDateText, { color: colors.textPrimary }]}
+            >
               {selectedDates.length > 1
                 ? `${selectedDates.length} days selected`
                 : prettyWorkDate(focusDate)}
@@ -673,7 +680,9 @@ export default function SupervisorScanScreen() {
                   <Text
                     style={[
                       styles.dateOptionText,
-                      { color: selected ? colors.accent : colors.textSecondary },
+                      {
+                        color: selected ? colors.accent : colors.textSecondary,
+                      },
                     ]}
                   >
                     {prettyWorkDate(workDate)}
@@ -814,10 +823,10 @@ export default function SupervisorScanScreen() {
                   {busySubmit
                     ? "Please wait while the selected scans are saved."
                     : allSelectedDatesLocked
-                    ? selectedDates.length > 1
-                      ? "All selected days are locked. You cannot add more scans."
-                      : "This site day is locked. You cannot add more scans."
-                    : "Tap Site to choose, then choose the foreman for that site."}
+                      ? selectedDates.length > 1
+                        ? "All selected days are locked. You cannot add more scans."
+                        : "This site day is locked. You cannot add more scans."
+                      : "Tap Site to choose, then choose the foreman for that site."}
                 </Text>
               </View>
             )}
@@ -845,8 +854,8 @@ export default function SupervisorScanScreen() {
                     canScan && batch.length && !busySubmit
                       ? colors.accent
                       : theme === "dark"
-                        ? "rgba(56,189,248,0.2)"
-                        : "rgba(38,45,104,0.2)",
+                        ? "rgba(34,197,94,0.2)"
+                        : "rgba(34,197,94,0.2)",
                   opacity: !batch.length || !canScan || busySubmit ? 0.7 : 1,
                 },
               ]}
@@ -857,7 +866,9 @@ export default function SupervisorScanScreen() {
                   <Text style={styles.btnPrimaryText}>SUBMITTING...</Text>
                 </>
               ) : (
-                <Text style={styles.btnPrimaryText}>SUBMIT ({batch.length})</Text>
+                <Text style={styles.btnPrimaryText}>
+                  SUBMIT ({batch.length})
+                </Text>
               )}
             </Pressable>
           </View>
@@ -903,8 +914,8 @@ export default function SupervisorScanScreen() {
                       {
                         backgroundColor:
                           theme === "dark"
-                            ? "rgba(56,189,248,0.15)"
-                            : "rgba(38,45,104,0.12)",
+                            ? "rgba(34,197,94,0.15)"
+                            : "rgba(34,197,94,0.12)",
                         borderColor: colors.border,
                       },
                     ]}
@@ -1253,8 +1264,8 @@ export default function SupervisorScanScreen() {
                               : colors.border,
                             backgroundColor: selected
                               ? theme === "dark"
-                                ? "rgba(56,189,248,0.15)"
-                                : "rgba(38,45,104,0.12)"
+                                ? "rgba(34,197,94,0.15)"
+                                : "rgba(34,197,94,0.12)"
                               : theme === "dark"
                                 ? "rgba(255,255,255,0.06)"
                                 : "rgba(0,0,0,0.03)",

@@ -1,14 +1,12 @@
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import Svg, { Circle, Path } from "react-native-svg";
+import Svg, { Path } from "react-native-svg";
 
 import { useFaceTheme } from "./faceTheme";
-import GlassPanel from "./GlassPanel";
 
 interface PrimaryActionsProps {
   onVerifyPress?: () => void;
-  onCaptureReferencePress?: () => void;
 }
 
 function FaceScanIcon({ color }: { color: string }) {
@@ -60,42 +58,28 @@ function FaceScanIcon({ color }: { color: string }) {
   );
 }
 
-function CameraPlusIcon({ color }: { color: string }) {
-  return (
-    <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M4 8.5C4 7.4 4.9 6.5 6 6.5H8L9.2 4.5H14.8L16 6.5H18C19.1 6.5 20 7.4 20 8.5V17C20 18.1 19.1 19 18 19H6C4.9 19 4 18.1 4 17V8.5Z"
-        stroke={color}
-        strokeWidth={1.8}
-        strokeLinejoin="round"
-      />
-      <Circle cx={12} cy={12.5} r={3.4} stroke={color} strokeWidth={1.8} />
-    </Svg>
-  );
-}
-
 /**
  * PrimaryActions
  *
- * The two primary calls to action on the Face Verification home screen,
- * rendered as large tactile cards rather than conventional buttons:
- *
- * 1. "Verify Face" — a bold blue-gradient card, the terminal's main action.
- * 2. "Capture Reference Photos" — a quieter glass card for secondary setup.
+ * The terminal's main call to action, rendered as a large tactile card
+ * rather than a conventional button. "Capture Reference Photos" used to
+ * have a second card here, but it duplicated ReferencePhotosCard's own
+ * capture button on the same screen — removed rather than offering the
+ * same action twice.
  */
-export default function PrimaryActions({ onVerifyPress, onCaptureReferencePress }: PrimaryActionsProps) {
-  const { colors, typography, radius, spacing, shadows } = useFaceTheme();
+export default function PrimaryActions({ onVerifyPress }: PrimaryActionsProps) {
+  const { colors, typography, spacing, shadows } = useFaceTheme();
 
   return (
     <View style={[styles.container, { gap: spacing.md }]}>
       <Pressable onPress={onVerifyPress} style={({ pressed }) => [pressed && styles.pressed]}>
         <LinearGradient
-          colors={colors.gradientPrimaryAction}
+          colors={[colors.success, "#16A34A"] as const}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[styles.card, { gap: spacing.md, paddingVertical: spacing.lg, paddingHorizontal: spacing.lg, borderRadius: radius.xl }, shadows.glowSoft]}
+          style={[styles.card, { gap: spacing.md, paddingVertical: spacing.lg, paddingHorizontal: spacing.lg, borderRadius: 5 }, shadows.glowSoft]}
         >
-          <View style={[styles.iconBadgePrimary, { borderRadius: radius.md }]}>
+          <View style={[styles.iconBadgePrimary, { borderRadius: 5 }]}>
             <FaceScanIcon color={colors.textOnPrimary} />
           </View>
           <View style={styles.textBlock}>
@@ -105,25 +89,6 @@ export default function PrimaryActions({ onVerifyPress, onCaptureReferencePress 
             </Text>
           </View>
         </LinearGradient>
-      </Pressable>
-
-      <Pressable onPress={onCaptureReferencePress} style={({ pressed }) => [pressed && styles.pressed]}>
-        <GlassPanel radius={radius.xl} contentPadding={0}>
-          <View style={[styles.card, { gap: spacing.md, paddingVertical: spacing.lg, paddingHorizontal: spacing.lg, borderRadius: radius.xl }]}>
-            <View
-              style={[
-                styles.iconBadgeSecondary,
-                { borderRadius: radius.md, backgroundColor: colors.secondaryDim, borderColor: colors.secondaryDim },
-              ]}
-            >
-              <CameraPlusIcon color={colors.secondary} />
-            </View>
-            <View style={styles.textBlock}>
-              <Text style={[typography.title, { fontSize: 20 }]}>Capture Reference Photos</Text>
-              <Text style={[typography.body, { marginTop: 2 }]}>Improve verification accuracy</Text>
-            </View>
-          </View>
-        </GlassPanel>
       </Pressable>
     </View>
   );
@@ -144,13 +109,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.16)",
-  },
-  iconBadgeSecondary: {
-    width: 56,
-    height: 56,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
   },
   textBlock: {
     flex: 1,

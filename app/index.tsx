@@ -18,7 +18,7 @@ export default function Index() {
           backgroundColor: "#0b1220",
         }}
       >
-        <ActivityIndicator size="large" color="#38bdf8" />
+        <ActivityIndicator size="large" color="#22c55e" />
       </View>
     );
   }

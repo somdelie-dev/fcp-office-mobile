@@ -15,9 +15,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { GlassCard } from "@/components/GlassCard";
+import { downloadAndLaunchInstaller } from "@/lib/appInstaller";
 import { useAuth } from "@/lib/auth";
 import { cacheClearAll } from "@/lib/mobileCache";
 import { useTheme } from "@/lib/themeContext";
+import { checkForUpdate } from "@/lib/updateCheck";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -30,6 +32,7 @@ export default function SettingsScreen() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
   const [clearingCache, setClearingCache] = useState(false);
+  const [checkingForUpdate, setCheckingForUpdate] = useState(false);
 
   const colors = {
     bg: isDark ? "#0f172a" : "#f8fafc",
@@ -37,7 +40,7 @@ export default function SettingsScreen() {
     textMuted: isDark ? "#94a3b8" : "#64748b",
     cardBg: isDark ? "rgba(30, 41, 59, 0.8)" : "rgba(255,255,255,0.9)",
     border: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
-    accent: isDark ? "#38bdf8" : "#262D68",
+    accent: isDark ? "#22c55e" : "#16A34A",
     danger: "#ef4444",
     success: "#22c55e",
   };
@@ -69,6 +72,49 @@ export default function SettingsScreen() {
 
   const appVersion = Application.nativeApplicationVersion ?? "1.0.0";
   const buildNumber = Application.nativeBuildVersion ?? "1";
+
+  const handleCheckForUpdate = async () => {
+    if (Platform.OS !== "android") {
+      Alert.alert("Not Available", "Updates are only distributed for Android.");
+      return;
+    }
+    setCheckingForUpdate(true);
+    try {
+      const result = await checkForUpdate({ force: true });
+      if (result.status === "none") {
+        Alert.alert("Up to Date", "You're running the latest version of FirstClass.");
+        return;
+      }
+      Alert.alert(
+        "Update Available",
+        `Version ${result.release.version} is available.${
+          result.release.releaseNotes.length
+            ? `\n\n${result.release.releaseNotes.map((n) => `• ${n}`).join("\n")}`
+            : ""
+        }`,
+        [
+          { text: "Later", style: "cancel" },
+          {
+            text: "Update Now",
+            onPress: async () => {
+              try {
+                await downloadAndLaunchInstaller();
+              } catch (e: any) {
+                Alert.alert(
+                  "Update Failed",
+                  e?.message ?? "Couldn't download the update. Please try again.",
+                );
+              }
+            },
+          },
+        ],
+      );
+    } catch {
+      Alert.alert("Check Failed", "Couldn't reach the update server. Try again later.");
+    } finally {
+      setCheckingForUpdate(false);
+    }
+  };
 
   return (
     <ScrollView
@@ -226,6 +272,26 @@ export default function SettingsScreen() {
             {Platform.OS === "ios" ? "iOS" : "Android"}
           </Text>
         </SettingRow>
+
+        {Platform.OS === "android" && (
+          <Pressable onPress={handleCheckForUpdate} disabled={checkingForUpdate}>
+            <SettingRow
+              icon="cloud-download-outline"
+              label="Check for Updates"
+              description={
+                checkingForUpdate ? "Checking…" : "See if a newer version is available"
+              }
+              colors={colors}
+              border
+            >
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={colors.textMuted}
+              />
+            </SettingRow>
+          </Pressable>
+        )}
 
         <Pressable onPress={() => router.push("/(foreman-stack)/help")}>
           <SettingRow

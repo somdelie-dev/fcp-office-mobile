@@ -1,19 +1,20 @@
 import React from "react";
 import { StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useTheme } from "../lib/themeContext";
+import { useAppTheme } from "../lib/appTheme";
 
 type Props = {
   children: React.ReactNode;
 };
 
 export function AuthStyleBackground({ children }: Props) {
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
+  const { isDark, colors } = useAppTheme();
 
-  const BG = isDark ? "#0b1220" : "#EEF0F5";
-  const NAVY = isDark ? "#38bdf8" : "#262D68";
-  const CIRCLE_BG = isDark ? "rgba(56, 189, 248, 0.15)" : NAVY;
+  // Same dark background + green accent as the Face Scan screen, kept
+  // consistent across light/dark instead of the old ad hoc blue/navy tint.
+  const BG = colors.background;
+  const CIRCLE_BG = isDark ? colors.primaryGreenDim : colors.primaryGreen;
+  const CIRCLE_INNER_BG = isDark ? "rgba(34, 197, 94, 0.08)" : colors.surfaceElevated;
 
   return (
     <SafeAreaView
@@ -33,9 +34,7 @@ export function AuthStyleBackground({ children }: Props) {
           style={[
             styles.circleSmall,
             styles.circleTopInner,
-            {
-              backgroundColor: isDark ? "rgba(56, 189, 248, 0.08)" : "#DADDE8",
-            },
+            { backgroundColor: CIRCLE_INNER_BG },
           ]}
         />
 
@@ -50,9 +49,7 @@ export function AuthStyleBackground({ children }: Props) {
           style={[
             styles.circleSmall,
             styles.circleBottomInner,
-            {
-              backgroundColor: isDark ? "rgba(56, 189, 248, 0.08)" : "#DADDE8",
-            },
+            { backgroundColor: CIRCLE_INNER_BG },
           ]}
         />
 
@@ -78,17 +75,22 @@ const styles = StyleSheet.create({
     height: 360,
     borderRadius: 360,
     opacity: 0.8,
+    // Keep decorative circles behind the header/logo/avatar
+    zIndex: -1,
+    elevation: 0,
   },
   circleSmall: {
     position: "absolute",
     width: 220,
     height: 220,
     borderRadius: 220,
+    zIndex: -1,
+    elevation: 0,
   },
 
-  circleTop: { top: -220, right: -220 },
-  circleTopInner: { top: -155, right: -155 },
+  circleTop: { top: -260, right: -260 },
+  circleTopInner: { top: -190, right: -190 },
 
-  circleBottom: { bottom: -220, left: -220 },
-  circleBottomInner: { bottom: -155, left: -155 },
+  circleBottom: { bottom: -240, left: -240 },
+  circleBottomInner: { bottom: -170, left: -170 },
 });

@@ -57,7 +57,7 @@ const themes = {
     foremanPlaceholderText: "#60a5fa",
     filterBg: "#1e293b",
     filterBorder: "#334155",
-    filterActiveBg: "#3b82f6",
+    filterActiveBg: "#22c55e",
   },
   light: {
     textPrimary: "#111",
@@ -74,7 +74,7 @@ const themes = {
     foremanPlaceholderText: "#2563eb",
     filterBg: "#f5f5f5",
     filterBorder: "#e0e0e0",
-    filterActiveBg: "#3b82f6",
+    filterActiveBg: "#22c55e",
   },
 };
 
@@ -183,9 +183,9 @@ function EmployeeCard({
         <View style={styles.cardActions}>
           <TouchableOpacity
             onPress={onDownloadCard}
-            style={[styles.iconActionButton, { backgroundColor: "#dbeafe" }]}
+            style={[styles.iconActionButton, { backgroundColor: "#dcfce7" }]}
           >
-            <Ionicons name="download-outline" size={16} color="#2563eb" />
+            <Ionicons name="download-outline" size={16} color="#16a34a" />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={onDeactivate}
@@ -1221,7 +1221,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: "#0ea5e9",
+    backgroundColor: "#16A34A",
   },
   saveCreateText: {
     color: "#fff",

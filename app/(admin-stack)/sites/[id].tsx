@@ -685,11 +685,11 @@ export default function AdminSiteDetailScreen() {
                   {
                     backgroundColor: pressed
                       ? isDark
-                        ? "rgba(56,189,248,0.15)"
-                        : "rgba(14,165,233,0.1)"
+                        ? "rgba(34,197,94,0.15)"
+                        : "rgba(22,163,74,0.1)"
                       : isDark
-                        ? "rgba(56,189,248,0.08)"
-                        : "rgba(14,165,233,0.05)",
+                        ? "rgba(34,197,94,0.08)"
+                        : "rgba(22,163,74,0.05)",
                     borderColor: isDark ? "#1e3a5f" : "#bae6fd",
                   },
                   actionBusy && { opacity: 0.5 },
@@ -698,12 +698,12 @@ export default function AdminSiteDetailScreen() {
                 <Ionicons
                   name="create-outline"
                   size={20}
-                  color={isDark ? "#38bdf8" : "#0284c7"}
+                  color={isDark ? "#22c55e" : "#0284c7"}
                 />
                 <Text
                   style={[
                     styles.actionButtonText,
-                    { color: isDark ? "#38bdf8" : "#0284c7" },
+                    { color: isDark ? "#22c55e" : "#0284c7" },
                   ]}
                 >
                   Edit Site
@@ -915,7 +915,7 @@ export default function AdminSiteDetailScreen() {
           </View>
           {costsLoading ? (
             <View style={styles.loadingRow}>
-              <ActivityIndicator size="small" color="#3b82f6" />
+              <ActivityIndicator size="small" color="#22c55e" />
               <Text style={[styles.sectionBodyText, { color: textSub }]}>Loading costs…</Text>
             </View>
           ) : costs ? (
@@ -1112,7 +1112,7 @@ export default function AdminSiteDetailScreen() {
 
             {pickerLoading ? (
               <View style={styles.drawerLoading}>
-                <ActivityIndicator size="large" color="#3b82f6" />
+                <ActivityIndicator size="large" color="#22c55e" />
                 <Text style={[styles.drawerLoadingText, { color: textSub }]}>
                   Loading users…
                 </Text>
@@ -1153,8 +1153,8 @@ export default function AdminSiteDetailScreen() {
                         borderColor: isDark ? "#1f2937" : "#e5e7eb",
                         backgroundColor: pressed
                           ? isDark
-                            ? "rgba(56,189,248,0.1)"
-                            : "rgba(14,165,233,0.06)"
+                            ? "rgba(34,197,94,0.1)"
+                            : "rgba(22,163,74,0.06)"
                           : "transparent",
                       },
                       assignBusy && { opacity: 0.5 },
@@ -1190,7 +1190,7 @@ export default function AdminSiteDetailScreen() {
                     <Ionicons
                       name="add-circle"
                       size={24}
-                      color={isDark ? "#38bdf8" : "#0284c7"}
+                      color={isDark ? "#22c55e" : "#0284c7"}
                     />
                   </Pressable>
                 )}
@@ -1824,7 +1824,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 999,
-    backgroundColor: "#262D68",
+    backgroundColor: "#16A34A",
   },
   addAssignBtnText: {
     color: "#fff",
@@ -1906,7 +1906,7 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   modalPrimaryButton: {
-    backgroundColor: "#262D68",
+    backgroundColor: "#16A34A",
   },
   modalButtonText: {
     fontSize: 13,
@@ -2135,7 +2135,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     height: 46,
     borderRadius: 12,
-    backgroundColor: "#262D68",
+    backgroundColor: "#16A34A",
     alignItems: "center",
     justifyContent: "center",
   },

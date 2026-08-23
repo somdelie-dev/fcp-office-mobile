@@ -1,27 +1,26 @@
 import React from "react";
 import { StyleSheet, View } from "react-native";
-import { useTheme } from "../lib/themeContext";
+import { useAppTheme } from "../lib/appTheme";
 
 export function GradientBackground({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
+  const { isDark, colors } = useAppTheme();
 
-  const containerBg = isDark ? "#0b1220" : "#fafafa";
+  const containerBg = colors.background;
 
   return (
     <View style={[styles.container, { backgroundColor: containerBg }]}>
-      {/* Background gradient effects */}
+      {/* Background gradient effects, tinted with the Face Scan green accent */}
       <View
         style={[
           styles.gradientBackground,
           {
             backgroundColor: isDark
-              ? "rgba(56, 189, 248, 0.06)"
-              : "rgba(99, 102, 241, 0.08)",
+              ? "rgba(34, 197, 94, 0.06)"
+              : "rgba(22, 163, 74, 0.07)",
           },
         ]}
       />
@@ -30,8 +29,8 @@ export function GradientBackground({
           styles.gradientAccent,
           {
             backgroundColor: isDark
-              ? "rgba(56, 189, 248, 0.04)"
-              : "rgba(168, 85, 247, 0.06)",
+              ? "rgba(34, 197, 94, 0.04)"
+              : "rgba(22, 163, 74, 0.05)",
           },
         ]}
       />
@@ -49,20 +48,25 @@ const styles = StyleSheet.create({
   },
   gradientBackground: {
     position: "absolute",
-    top: -100,
-    left: -50,
-    width: 400,
-    height: 400,
-    borderRadius: 200,
+    top: -160,
+    left: -120,
+    width: 420,
+    height: 420,
+    borderRadius: 210,
     opacity: 0.6,
+    // Sit behind navigation chrome (logo/avatar)
+    zIndex: -1,
+    elevation: 0,
   },
   gradientAccent: {
     position: "absolute",
-    bottom: -150,
-    right: -100,
-    width: 500,
-    height: 500,
-    borderRadius: 250,
+    bottom: -180,
+    right: -140,
+    width: 520,
+    height: 520,
+    borderRadius: 260,
     opacity: 0.5,
+    zIndex: -1,
+    elevation: 0,
   },
 });

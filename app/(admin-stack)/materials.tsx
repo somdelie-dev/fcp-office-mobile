@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "#262D68",
+    backgroundColor: "#16A34A",
   },
   retryBtnText: { color: "#fff", fontWeight: "800", fontSize: 13 },
   list: { padding: 16, gap: 10, paddingBottom: 40 },

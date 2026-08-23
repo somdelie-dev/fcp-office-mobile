@@ -46,7 +46,6 @@ export default function MainLayout() {
     <Tabs>
       <Tabs.Screen name="(foreman)/home" options={{ title: "Home" }} />
       <Tabs.Screen name="(foreman)/scan" options={{ title: "Scan" }} />
-      <Tabs.Screen name="(foreman)/history" options={{ title: "History" }} />
     </Tabs>
   );
 }

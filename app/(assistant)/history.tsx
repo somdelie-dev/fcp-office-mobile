@@ -46,13 +46,13 @@ function badgeColor(
   if (result === "ALREADY_SCANNED")
     return isDark
       ? {
-          bg: "rgba(56,189,248,0.2)",
-          br: "rgba(56,189,248,0.3)",
-          tx: "#38bdf8",
+          bg: "rgba(34,197,94,0.2)",
+          br: "rgba(34,197,94,0.3)",
+          tx: "#22c55e",
         }
       : {
-          bg: "rgba(14,165,233,0.10)",
-          br: "rgba(14,165,233,0.18)",
+          bg: "rgba(22,163,74,0.10)",
+          br: "rgba(22,163,74,0.18)",
           tx: "#0b6b99",
         };
   if (result === "UNKNOWN")

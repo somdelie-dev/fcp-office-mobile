@@ -219,7 +219,7 @@ function Label({ text }: { text: string }) {
   return <Text style={styles.label}>{text}</Text>;
 }
 
-const NAVY = "#262D68";
+const NAVY = "#16A34A";
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   toggleOn: {
-    backgroundColor: "rgba(38,45,104,0.12)",
+    backgroundColor: "rgba(34,197,94,0.12)",
     borderColor: "rgba(0,0,0,0.06)",
   },
   toggleOff: {

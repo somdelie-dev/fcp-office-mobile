@@ -1,6 +1,9 @@
 import { AuthStyleBackground } from "@/components/AuthStyleBackground";
 import { GlassCard } from "@/components/GlassCard";
-import { useTheme } from "@/lib/themeContext";
+import {
+  useFaceTheme,
+  type FaceColorPalette,
+} from "@/components/team/faceTheme";
 import { Ionicons } from "@expo/vector-icons";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
@@ -18,16 +21,19 @@ import {
   View,
 } from "react-native";
 import { WebView } from "react-native-webview";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   apiForemanTimesheetsCached,
+  apiForemanTimesheetsForPeriod,
   type TimesheetListRowDto,
   type TimesheetStatus,
 } from "../../lib/apiClient";
 import { getApiBase, getToken } from "../../lib/api";
-
-function monthKeyFromISO(iso: string) {
-  return String(iso ?? "").slice(0, 7); // YYYY-MM
-}
+import {
+  getCurrentFortnight,
+  getFortnightForDate,
+  type Fortnight,
+} from "../../lib/fortnight";
 
 function prettyRange(startISO: string, endISO: string) {
   const a = new Date(`${startISO}T00:00:00`);
@@ -54,22 +60,7 @@ function statusLabel(s: TimesheetStatus | undefined) {
   }
 }
 
-function statusColor(s: TimesheetStatus | undefined) {
-  switch (s) {
-    case "SUBMITTED":
-      return "#DC2626";
-    case "ACCEPTED":
-      return "#16A34A";
-    case "APPROVED":
-      return "#16A34A";
-    case "PAID":
-      return "#2563EB";
-    case "REJECTED":
-      return "#EA580C";
-    default:
-      return "#666";
-  }
-}
+// statusColor moved into component so it can use the face theme
 
 /**
  * Accept:
@@ -87,14 +78,59 @@ function pickTimesheets(res: any): TimesheetListRowDto[] {
 
 export default function ForemanTimesheets() {
   const router = useRouter();
-  const { theme } = useTheme();
-  const colors = themes[theme];
-  const styles = getStyles(colors);
+  const insets = useSafeAreaInsets();
+  const { colors: faceColors, radius, typography } = useFaceTheme();
+  const styles = getStyles(faceColors, radius, typography);
+  // local mapping so the component can still reference `colors.*` as before
+  const colors = {
+    bg: faceColors.background,
+    bgSecondary: faceColors.backgroundElevated,
+    border: (faceColors as any).glassBorder ?? faceColors.backgroundElevated,
+    textPrimary: faceColors.textPrimary,
+    textOnPrimary: faceColors.textOnPrimary,
+    textSecondary: faceColors.textSecondary,
+    // matches the green brand action colour used on the foreman home screen
+    info: faceColors.success,
+    infoLight: faceColors.successDim,
+    infoBg: faceColors.successDim,
+    error: faceColors.danger,
+    errorLight: faceColors.dangerDim,
+  } as const;
+
+  function statusColor(s: TimesheetStatus | undefined) {
+    switch (s) {
+      case "SUBMITTED":
+        return faceColors.danger;
+      case "ACCEPTED":
+        return faceColors.success;
+      case "APPROVED":
+        return faceColors.success;
+      case "PAID":
+        return faceColors.primary;
+      case "REJECTED":
+        return faceColors.warning;
+      default:
+        return faceColors.textSecondary;
+    }
+  }
   const [rows, setRows] = useState<TimesheetListRowDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [month, setMonth] = useState<string>("ALL");
+  // Default to the current fortnight only — the list endpoint returns the
+  // current period plus up to 2 previous ones in one flat array, and
+  // showing all of them by default made past-fortnight sites look like
+  // they belonged to the current one.
+  const [scope, setScope] = useState<"CURRENT" | "ALL">("CURRENT");
+
+  // "All History" — a picker of the 3 fortnights before the current one
+  // (current is always shown on its own tab, so it's excluded here).
+  // Each fortnight's rows are fetched on demand when selected.
+  const [selectedPastId, setSelectedPastId] = useState<string | null>(null);
+  const [fortnightDropdownOpen, setFortnightDropdownOpen] = useState(false);
+  const [pastRows, setPastRows] = useState<TimesheetListRowDto[]>([]);
+  const [pastLoading, setPastLoading] = useState(false);
+  const [pastError, setPastError] = useState<string | null>(null);
 
   const [refreshing, setRefreshing] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -188,15 +224,6 @@ export default function ForemanTimesheets() {
     }
   }, [pdfFilename, pdfUri]);
 
-  const monthOptions = useMemo(() => {
-    const s = new Set<string>();
-    rows.forEach((r) => {
-      const k = monthKeyFromISO(r.startISO);
-      if (k) s.add(k);
-    });
-    return ["ALL", ...Array.from(s).sort().reverse()];
-  }, [rows]);
-
   const previousTimesheet = useMemo(() => {
     if (!rows.length) return null;
 
@@ -211,19 +238,66 @@ export default function ForemanTimesheets() {
     return prev ?? null;
   }, [rows]);
 
+  // Past 3 fortnights, most recent first, excluding the current one — it
+  // always has its own tab.
+  const pastFortnights = useMemo(() => {
+    const current = getCurrentFortnight();
+    const out: Fortnight[] = [];
+    let cursorStart = new Date(`${current.startISO}T00:00:00.000Z`);
+    for (let i = 0; i < 3; i++) {
+      cursorStart = new Date(cursorStart.getTime() - 14 * 24 * 60 * 60 * 1000);
+      const dateISO = cursorStart.toISOString().slice(0, 10);
+      out.push(getFortnightForDate(dateISO));
+    }
+    return out;
+  }, []);
+
+  const selectedPastFortnight = useMemo(
+    () => pastFortnights.find((f) => f.id === selectedPastId) ?? null,
+    [pastFortnights, selectedPastId],
+  );
+
+  const loadPastPeriod = useCallback(async (periodId: string) => {
+    setPastLoading(true);
+    setPastError(null);
+    try {
+      const res = await apiForemanTimesheetsForPeriod(periodId);
+      setPastRows(res.timesheets ?? []);
+    } catch (e: any) {
+      setPastError(e?.message ?? "Failed to load this fortnight.");
+      setPastRows([]);
+    } finally {
+      setPastLoading(false);
+    }
+  }, []);
+
+  const selectScope = useCallback(
+    (next: "CURRENT" | "ALL") => {
+      setScope(next);
+      if (next === "ALL" && !selectedPastId && pastFortnights[0]) {
+        setSelectedPastId(pastFortnights[0].id);
+        loadPastPeriod(pastFortnights[0].id);
+      }
+    },
+    [selectedPastId, pastFortnights, loadPastPeriod],
+  );
+
+  const selectPastFortnight = useCallback(
+    (id: string) => {
+      setSelectedPastId(id);
+      loadPastPeriod(id);
+    },
+    [loadPastPeriod],
+  );
+
   const filtered = useMemo(() => {
     const list =
-      month === "ALL"
-        ? rows
-        : rows.filter((r) => monthKeyFromISO(r.startISO) === month);
+      scope === "CURRENT" ? rows.filter((r) => r.isCurrent) : pastRows;
 
-    return [...list].sort((a, b) => {
-      if (Boolean(a.isCurrent) !== Boolean(b.isCurrent)) {
-        return a.isCurrent ? -1 : 1;
-      }
-      return String(b.startISO).localeCompare(String(a.startISO));
-    });
-  }, [rows, month]);
+    return [...list].sort((a, b) =>
+      String(b.startISO).localeCompare(String(a.startISO)),
+    );
+  }, [rows, scope, pastRows]);
 
   return (
     <AuthStyleBackground>
@@ -243,7 +317,7 @@ export default function ForemanTimesheets() {
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                backgroundColor: "#ea580c",
+                backgroundColor: colors.info,
                 paddingHorizontal: 14,
                 paddingVertical: 8,
                 borderRadius: 20,
@@ -253,24 +327,130 @@ export default function ForemanTimesheets() {
               {refreshing ? (
                 <ActivityIndicator
                   size="small"
-                  color="#fff"
+                  color={colors.textOnPrimary}
                   style={{ marginRight: 6 }}
                 />
               ) : (
                 <Ionicons
                   name="refresh"
                   size={16}
-                  color="#fff"
+                  color={colors.textOnPrimary}
                   style={{ marginRight: 6 }}
                 />
               )}
-              <Text style={{ color: "#fff", fontWeight: "800", fontSize: 13 }}>
+              <Text style={{ color: colors.textOnPrimary, fontWeight: "800", fontSize: 13 }}>
                 {refreshing ? "Refreshing…" : "Refresh"}
               </Text>
             </Pressable>
           </View>
-          <Text style={styles.sub}>Fortnight-based, current always on top</Text>
+          <Text style={styles.sub}>
+            {scope === "CURRENT"
+              ? "Showing your current fortnight"
+              : "Pick a past fortnight to view"}
+          </Text>
         </View>
+
+        <GlassCard style={{ padding: 12 }}>
+          <View style={styles.filters}>
+            <Pressable
+              onPress={() => selectScope("CURRENT")}
+              style={[styles.pill, scope === "CURRENT" && styles.pillActive]}
+            >
+              <Text
+                style={[
+                  styles.pillTxt,
+                  scope === "CURRENT" && styles.pillTxtActive,
+                ]}
+              >
+                Current Fortnight
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => selectScope("ALL")}
+              style={[styles.pill, scope === "ALL" && styles.pillActive]}
+            >
+              <Text
+                style={[
+                  styles.pillTxt,
+                  scope === "ALL" && styles.pillTxtActive,
+                ]}
+              >
+                All History
+              </Text>
+            </Pressable>
+          </View>
+        </GlassCard>
+
+        {scope === "ALL" && (
+          <GlassCard style={{ padding: 12 }}>
+            <Pressable
+              style={styles.fortnightDropdownTrigger}
+              onPress={() => setFortnightDropdownOpen(true)}
+            >
+              <Text style={styles.fortnightDropdownTxt} numberOfLines={1}>
+                {selectedPastFortnight
+                  ? prettyRange(
+                      selectedPastFortnight.startISO,
+                      selectedPastFortnight.endISO,
+                    )
+                  : "Select a fortnight"}
+              </Text>
+              <Ionicons
+                name="chevron-down"
+                size={16}
+                color={colors.textSecondary}
+              />
+            </Pressable>
+          </GlassCard>
+        )}
+
+        <Modal
+          visible={fortnightDropdownOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setFortnightDropdownOpen(false)}
+        >
+          <Pressable
+            style={styles.dropdownBackdrop}
+            onPress={() => setFortnightDropdownOpen(false)}
+          >
+            <Pressable style={styles.dropdownSheet} onPress={() => {}}>
+              <Text style={styles.dropdownSheetTitle}>Select a fortnight</Text>
+              {pastFortnights.map((f) => {
+                const active = selectedPastId === f.id;
+                return (
+                  <Pressable
+                    key={f.id}
+                    style={[
+                      styles.dropdownRow,
+                      active && styles.dropdownRowActive,
+                    ]}
+                    onPress={() => {
+                      setFortnightDropdownOpen(false);
+                      selectPastFortnight(f.id);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.dropdownRowTxt,
+                        active && { color: colors.info },
+                      ]}
+                    >
+                      {prettyRange(f.startISO, f.endISO)}
+                    </Text>
+                    {active && (
+                      <Ionicons
+                        name="checkmark"
+                        size={18}
+                        color={colors.info}
+                      />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </Pressable>
+          </Pressable>
+        </Modal>
         {/* 
         {previousTimesheet && (
           <GlassCard style={{ padding: 12 }}>
@@ -343,38 +523,30 @@ export default function ForemanTimesheets() {
           </GlassCard>
         )} */}
 
-        <GlassCard style={{ padding: 12 }}>
-          <View style={styles.filters}>
-            {monthOptions.slice(0, 6).map((m) => (
-              <Pressable
-                key={m}
-                onPress={() => setMonth(m)}
-                style={[styles.pill, month === m && styles.pillActive]}
-              >
-                <Text
-                  style={[styles.pillTxt, month === m && styles.pillTxtActive]}
-                >
-                  {m === "ALL" ? "All" : m}
-                </Text>
-              </Pressable>
-            ))}
-            {monthOptions.length > 6 ? (
-              <Text style={styles.moreText}>
-                (+{monthOptions.length - 6} more later)
-              </Text>
-            ) : null}
-          </View>
-        </GlassCard>
-
-        {loading ? (
+        {scope === "CURRENT" && loading ? (
           <GlassCard style={styles.loading}>
             <ActivityIndicator />
             <Text style={styles.loadingText}>Loading…</Text>
           </GlassCard>
-        ) : error ? (
+        ) : scope === "CURRENT" && error ? (
           <GlassCard style={{ padding: 16, gap: 10 }}>
             <Text style={styles.errorText}>{error}</Text>
             <Pressable style={styles.btnSecondary} onPress={() => refresh()}>
+              <Text style={styles.btnSecondaryText}>Retry</Text>
+            </Pressable>
+          </GlassCard>
+        ) : scope === "ALL" && pastLoading ? (
+          <GlassCard style={styles.loading}>
+            <ActivityIndicator />
+            <Text style={styles.loadingText}>Loading…</Text>
+          </GlassCard>
+        ) : scope === "ALL" && pastError ? (
+          <GlassCard style={{ padding: 16, gap: 10 }}>
+            <Text style={styles.errorText}>{pastError}</Text>
+            <Pressable
+              style={styles.btnSecondary}
+              onPress={() => selectedPastId && loadPastPeriod(selectedPastId)}
+            >
               <Text style={styles.btnSecondaryText}>Retry</Text>
             </Pressable>
           </GlassCard>
@@ -472,12 +644,12 @@ export default function ForemanTimesheets() {
                           ]}
                         >
                           {downloading ? (
-                            <ActivityIndicator size="small" color="#fff" />
+                            <ActivityIndicator size="small" color={colors.textOnPrimary} />
                           ) : (
                             <Ionicons
                               name="download-outline"
                               size={15}
-                              color="#fff"
+                              color={colors.textOnPrimary}
                             />
                           )}
                           <Text style={styles.pdfButtonText}>
@@ -492,13 +664,18 @@ export default function ForemanTimesheets() {
               ListEmptyComponent={
                 <View style={{ padding: 16 }}>
                   <Text style={styles.emptyText}>
-                    No timesheets yet. Scan guys to create days, then they’ll
-                    group into fortnights.
+                    {scope === "ALL"
+                      ? "No attendance recorded for this fortnight."
+                      : "No timesheets yet. Scan guys to create days, then they’ll group into fortnights."}
                   </Text>
 
                   <Pressable
                     style={[styles.btnSecondary, { marginTop: 12 }]}
-                    onPress={() => refresh()}
+                    onPress={() =>
+                      scope === "ALL"
+                        ? selectedPastId && loadPastPeriod(selectedPastId)
+                        : refresh()
+                    }
                   >
                     <Text style={styles.btnSecondaryText}>Refresh</Text>
                   </Pressable>
@@ -514,13 +691,13 @@ export default function ForemanTimesheets() {
           onRequestClose={() => setPdfUri(null)}
         >
           <View style={styles.pdfModal}>
-            <View style={styles.pdfHeader}>
+            <View style={[styles.pdfHeader, { paddingTop: insets.top + 12 }]}>
               <Text style={styles.pdfTitle}>Timesheet PDF</Text>
               <Pressable
                 style={styles.pdfClose}
                 onPress={() => setPdfUri(null)}
               >
-                <Ionicons name="close" size={22} color="#fff" />
+                <Ionicons name="close" size={22} color={colors.textOnPrimary} />
               </Pressable>
             </View>
             <View style={styles.pdfActions}>
@@ -533,9 +710,9 @@ export default function ForemanTimesheets() {
                 disabled={sharingPdf}
               >
                 {sharingPdf ? (
-                  <ActivityIndicator color="#fff" size="small" />
+                  <ActivityIndicator color={colors.textOnPrimary} size="small" />
                 ) : (
-                  <Ionicons name="share-outline" size={16} color="#fff" />
+                  <Ionicons name="share-outline" size={16} color={colors.textOnPrimary} />
                 )}
                 <Text style={styles.pdfShareText}>Save / Share</Text>
               </Pressable>
@@ -564,47 +741,28 @@ export default function ForemanTimesheets() {
   );
 }
 
-/* keep your themes + styles as-is */
+const getStyles = (
+  faceColors: FaceColorPalette,
+  radius: { sm: number; md: number; lg: number; xl: number; pill: number },
+  typography?: Record<string, any>,
+) => {
+  // map legacy keys used in this screen to the FaceColorPalette
+  const colors = {
+    bg: faceColors.background,
+    bgSecondary: faceColors.backgroundElevated,
+    border: (faceColors as any).glassBorder ?? faceColors.backgroundElevated,
+    textPrimary: faceColors.textPrimary,
+    textOnPrimary: faceColors.textOnPrimary,
+    textSecondary: faceColors.textSecondary,
+    // matches the green brand action colour used on the foreman home screen
+    info: faceColors.success,
+    infoLight: faceColors.successDim,
+    infoBg: faceColors.successDim,
+    error: faceColors.danger,
+    errorLight: faceColors.dangerDim,
+  } as const;
 
-const themes = {
-  dark: {
-    bg: "#0b1220",
-    bgSecondary: "#0f172a",
-    border: "#1f2a44",
-    textPrimary: "white",
-    textSecondary: "#94a3b8",
-    accent: "#38bdf8",
-    accentLight: "rgba(56,189,248,0.18)",
-    success: "#16a34a",
-    successLight: "rgba(22,163,74,0.12)",
-    error: "#dc2626",
-    errorLight: "rgba(220,38,38,0.10)",
-    warning: "#f59e0b",
-    warningLight: "rgba(245,158,11,0.14)",
-    info: "#38bdf8",
-    infoLight: "rgba(56,189,248,0.14)",
-  },
-  light: {
-    bg: "#f8fafc",
-    bgSecondary: "#ffffff",
-    border: "#e2e8f0",
-    textPrimary: "#0f172a",
-    textSecondary: "#64748b",
-    accent: "#0ea5e9",
-    accentLight: "rgba(14,165,233,0.08)",
-    success: "#22c55e",
-    successLight: "rgba(34,197,94,0.12)",
-    error: "#ef4444",
-    errorLight: "rgba(239,68,68,0.10)",
-    warning: "#f59e0b",
-    warningLight: "rgba(245,158,11,0.14)",
-    info: "#262D68",
-    infoLight: "rgba(38,45,104,0.14)",
-  },
-};
-
-const getStyles = (colors: (typeof themes)["dark"]) =>
-  StyleSheet.create({
+  return StyleSheet.create({
     wrap: { flex: 1, padding: 16, gap: 12 },
     header: { gap: 4 },
     h1: { fontSize: 20, fontWeight: "900", color: colors.textPrimary },
@@ -639,11 +797,69 @@ const getStyles = (colors: (typeof themes)["dark"]) =>
       fontSize: 12,
       color: colors.textPrimary,
     },
-    pillTxtActive: { color: "#fff" },
+    pillTxtActive: { color: colors.textOnPrimary },
     moreText: {
       color: colors.textSecondary,
       fontWeight: "800",
       marginLeft: 4,
+    },
+
+    fortnightDropdownTrigger: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      backgroundColor: colors.bgSecondary,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    fortnightDropdownTxt: {
+      flex: 1,
+      color: colors.textPrimary,
+      fontWeight: "800",
+      fontSize: 14,
+    },
+
+    dropdownBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      justifyContent: "center",
+      paddingHorizontal: 24,
+    },
+    dropdownSheet: {
+      backgroundColor: colors.bgSecondary,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+    },
+    dropdownSheetTitle: {
+      color: colors.textSecondary,
+      fontWeight: "900",
+      fontSize: 12,
+      textTransform: "uppercase",
+      marginBottom: 8,
+    },
+    dropdownRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 14,
+      paddingHorizontal: 4,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    dropdownRowActive: {
+      backgroundColor: colors.infoLight,
+      borderRadius: 10,
+      paddingHorizontal: 10,
+    },
+    dropdownRowTxt: {
+      color: colors.textPrimary,
+      fontWeight: "800",
+      fontSize: 14,
     },
 
     listHeader: {
@@ -687,8 +903,7 @@ const getStyles = (colors: (typeof themes)["dark"]) =>
     rowMidText: {
       fontSize: 13,
       fontWeight: "800",
-      // Tailwind orange-500
-      color: "#f97316",
+      color: colors.info,
     },
     rowBottomText: {
       fontSize: 12,
@@ -745,7 +960,7 @@ const getStyles = (colors: (typeof themes)["dark"]) =>
       paddingHorizontal: 10,
       paddingVertical: 7,
     },
-    pdfButtonText: { color: "#fff", fontSize: 12, fontWeight: "900" },
+    pdfButtonText: { color: colors.textOnPrimary, fontSize: 12, fontWeight: "900" },
 
     btnSecondary: {
       backgroundColor: colors.bgSecondary,
@@ -759,7 +974,7 @@ const getStyles = (colors: (typeof themes)["dark"]) =>
     btnSecondaryText: { color: colors.textPrimary, fontWeight: "900" },
     pdfModal: { flex: 1, backgroundColor: colors.bgSecondary },
     pdfHeader: {
-      paddingTop: 52,
+      // paddingTop is set dynamically from useSafeAreaInsets() at the call site.
       paddingBottom: 12,
       paddingHorizontal: 16,
       flexDirection: "row",
@@ -767,7 +982,7 @@ const getStyles = (colors: (typeof themes)["dark"]) =>
       alignItems: "center",
       backgroundColor: colors.info,
     },
-    pdfTitle: { color: "#fff", fontSize: 18, fontWeight: "900" },
+    pdfTitle: { color: colors.textOnPrimary, fontSize: 18, fontWeight: "900" },
     pdfClose: { padding: 6 },
     pdfActions: {
       paddingHorizontal: 14,
@@ -795,7 +1010,7 @@ const getStyles = (colors: (typeof themes)["dark"]) =>
       justifyContent: "center",
       alignItems: "center",
     },
-    pdfShareText: { color: "#fff", fontWeight: "900", fontSize: 12 },
+    pdfShareText: { color: colors.textOnPrimary, fontWeight: "900", fontSize: 12 },
     pdfViewer: { flex: 1, backgroundColor: colors.bgSecondary },
     pdfLoading: {
       ...StyleSheet.absoluteFillObject,
@@ -814,3 +1029,4 @@ const getStyles = (colors: (typeof themes)["dark"]) =>
       fontWeight: "800",
     },
   });
+};

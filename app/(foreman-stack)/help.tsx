@@ -97,7 +97,7 @@ export default function HelpScreen() {
     textMuted: isDark ? "#94a3b8" : "#64748b",
     cardBg: isDark ? "rgba(30, 41, 59, 0.8)" : "rgba(255,255,255,0.9)",
     border: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
-    accent: isDark ? "#38bdf8" : "#262D68",
+    accent: isDark ? "#22c55e" : "#16A34A",
     success: "#22c55e",
     warning: "#f59e0b",
   };

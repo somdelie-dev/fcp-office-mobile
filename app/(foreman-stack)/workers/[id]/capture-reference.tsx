@@ -1,13 +1,33 @@
-import { CameraView, useCameraPermissions } from "expo-camera";
+import { CameraType, CameraView, useCameraPermissions } from "expo-camera";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import * as Device from "expo-device";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Image, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  Image,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
 
-import { FaceScreenBackground, GlassPanel, Header } from "@/components/team";
+import {
+  FaceScreenBackground,
+  GlassPanel,
+  Header,
+  ScanLineOverlay,
+} from "@/components/team";
 import { useFaceTheme } from "@/components/team/faceTheme";
 import {
   apiCreateFaceEnrollments,
@@ -29,7 +49,8 @@ import { describeQualityWarning } from "@/lib/faceQualityMessages";
 // native dev client / build, so the module's side effects never run
 // anywhere we can't use it anyway. The try/catch is a second safety net in
 // case some other environment turns out not to support it either.
-const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+const isExpoGo =
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 const canUseFaceDetector = !isExpoGo && Platform.OS !== "web";
 let useImageFaceDetector:
   | typeof import("react-native-vision-camera-face-detector").useImageFaceDetector
@@ -46,6 +67,7 @@ if (canUseFaceDetector) {
 
 type Step =
   | "intro"
+  | "ready"
   | "align"
   | "detected"
   | "noFace"
@@ -59,14 +81,41 @@ interface PoseSpec {
   pose: FaceEnrollmentPose;
   label: string;
   instruction: string;
+  /** Example photo bundled with the app — shown on the "ready" step so the worker/foreman can see what the pose should look like before starting. */
+  refImage: number;
 }
 
 const POSES: PoseSpec[] = [
-  { pose: "FRONT", label: "Front", instruction: "Look straight at the camera" },
-  { pose: "LEFT", label: "Left", instruction: "Slowly turn your head to the left" },
-  { pose: "RIGHT", label: "Right", instruction: "Slowly turn your head to the right" },
-  { pose: "SMILE", label: "Smile", instruction: "Give a natural smile" },
-  { pose: "NEUTRAL", label: "Neutral", instruction: "Relax your expression" },
+  {
+    pose: "FRONT",
+    label: "Front",
+    instruction: "Look straight at the camera",
+    refImage: require("../../../../assets/images/face-ref/01_FRONT.png"),
+  },
+  {
+    pose: "LEFT",
+    label: "Left",
+    instruction: "Slowly turn your head to the left",
+    refImage: require("../../../../assets/images/face-ref/02_LEFT.png"),
+  },
+  {
+    pose: "RIGHT",
+    label: "Right",
+    instruction: "Slowly turn your head to the right",
+    refImage: require("../../../../assets/images/face-ref/03_RIGHT.png"),
+  },
+  {
+    pose: "SMILE",
+    label: "Smile",
+    instruction: "Give a natural smile",
+    refImage: require("../../../../assets/images/face-ref/04_SMILE.png"),
+  },
+  {
+    pose: "NEUTRAL",
+    label: "Neutral",
+    instruction: "Relax your expression",
+    refImage: require("../../../../assets/images/face-ref/05_NEUTRAL.png"),
+  },
 ];
 
 // Slower, more deliberate pacing than a snapshot-fast auto-capture — the
@@ -76,7 +125,11 @@ const ALIGN_DURATION = 2200;
 const CAPTURE_DELAY = 1500;
 const CAPTURED_HOLD = 900;
 
-const CAMERA_STAGE_SIZE = 240;
+// Also used as ScanLineOverlay's `size` (its sweep range is relative to
+// height, not width) — kept as a constant rather than read back off
+// styles.photoStageWrap so it doesn't depend on StyleSheet.create's return
+// shape.
+const PHOTO_STAGE_HEIGHT = 340;
 
 // Module-level so it's a stable reference — passing a fresh object literal
 // to useImageFaceDetector on every render would recreate the native
@@ -131,11 +184,23 @@ function FaceOutlineIcon({ color }: { color: string }) {
   );
 }
 
-function CheckCircleIcon({ color, size = 72 }: { color: string; size?: number }) {
+function CheckCircleIcon({
+  color,
+  size = 72,
+}: {
+  color: string;
+  size?: number;
+}) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Circle cx={12} cy={12} r={10} stroke={color} strokeWidth={1.6} />
-      <Path d="M7.5 12.5L10.3 15.3L16.5 8.5" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+      <Path
+        d="M7.5 12.5L10.3 15.3L16.5 8.5"
+        stroke={color}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </Svg>
   );
 }
@@ -144,7 +209,12 @@ function XCircleIcon({ color, size = 72 }: { color: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Circle cx={12} cy={12} r={10} stroke={color} strokeWidth={1.6} />
-      <Path d="M9 9L15 15M15 9L9 15" stroke={color} strokeWidth={2.2} strokeLinecap="round" />
+      <Path
+        d="M9 9L15 15M15 9L9 15"
+        stroke={color}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+      />
     </Svg>
   );
 }
@@ -152,7 +222,13 @@ function XCircleIcon({ color, size = 72 }: { color: string; size?: number }) {
 function CheckIcon({ color }: { color: string }) {
   return (
     <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-      <Path d="M4 12.5L9.5 18L20 6" stroke={color} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+      <Path
+        d="M4 12.5L9.5 18L20 6"
+        stroke={color}
+        strokeWidth={3}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </Svg>
   );
 }
@@ -160,7 +236,12 @@ function CheckIcon({ color }: { color: string }) {
 function SmallXIcon({ color }: { color: string }) {
   return (
     <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-      <Path d="M6 6L18 18M18 6L6 18" stroke={color} strokeWidth={3} strokeLinecap="round" />
+      <Path
+        d="M6 6L18 18M18 6L6 18"
+        stroke={color}
+        strokeWidth={3}
+        strokeLinecap="round"
+      />
     </Svg>
   );
 }
@@ -180,7 +261,7 @@ function PrimaryButton({
   tone?: "primary" | "success" | "danger" | "glass";
   disabled?: boolean;
 }) {
-  const { colors, typography, radius, shadows } = useFaceTheme();
+  const { colors, typography, shadows } = useFaceTheme();
 
   if (tone === "glass") {
     return (
@@ -189,7 +270,11 @@ function PrimaryButton({
         disabled={disabled}
         style={({ pressed }) => [
           styles.glassButton,
-          { borderRadius: radius.md, backgroundColor: colors.glassFill, borderColor: colors.glassBorder },
+          {
+            borderRadius: 5,
+            backgroundColor: colors.glassFill,
+            borderColor: colors.glassBorder,
+          },
           pressed && { opacity: 0.85 },
           disabled && { opacity: 0.5 },
         ]}
@@ -200,105 +285,291 @@ function PrimaryButton({
   }
 
   const gradientColors =
-    tone === "success"
-      ? (["#22C55E", "#16A34A"] as const)
-      : tone === "danger"
-        ? (["#EF4444", "#DC2626"] as const)
-        : colors.gradientPrimaryAction;
+    tone === "danger"
+      ? (["#EF4444", "#DC2626"] as const)
+      : (["#22C55E", "#16A34A"] as const);
 
   return (
-    <Pressable onPress={onPress} disabled={disabled} style={({ pressed }) => [pressed && { opacity: 0.9 }, disabled && { opacity: 0.5 }]}>
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        pressed && { opacity: 0.9 },
+        disabled && { opacity: 0.5 },
+      ]}
+    >
       <LinearGradient
         colors={gradientColors}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[styles.primaryButton, { borderRadius: radius.md }, shadows.glowSoft]}
+        style={[styles.primaryButton, { borderRadius: 5 }, shadows.glowSoft]}
       >
-        <Text style={[typography.bodyStrong, { color: colors.textOnPrimary, letterSpacing: 0.6 }]}>{label}</Text>
+        <Text
+          style={[
+            typography.bodyStrong,
+            { color: colors.textOnPrimary, letterSpacing: 0.6 },
+          ]}
+        >
+          {label}
+        </Text>
       </LinearGradient>
     </Pressable>
   );
 }
 
-function CornerBrackets({ size, color }: { size: number; color: string }) {
-  const len = size * 0.16;
-  const inset = size * 0.06;
-  return (
-    <View style={[StyleSheet.absoluteFillObject, { alignItems: "center", justifyContent: "center" }]} pointerEvents="none">
-      <View style={{ width: size + inset * 2, height: size + inset * 2 }}>
-        <View style={[bracketStyles.corner, { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderColor: color, width: len, height: len, borderTopLeftRadius: 10 }]} />
-        <View style={[bracketStyles.corner, { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderColor: color, width: len, height: len, borderTopRightRadius: 10 }]} />
-        <View style={[bracketStyles.corner, { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderColor: color, width: len, height: len, borderBottomLeftRadius: 10 }]} />
-        <View style={[bracketStyles.corner, { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderColor: color, width: len, height: len, borderBottomRightRadius: 10 }]} />
-      </View>
-    </View>
-  );
-}
-
-const bracketStyles = StyleSheet.create({
-  corner: { position: "absolute" },
-});
-
-function FaceCameraStage({
+/**
+ * Bounded, centered photo stage with a glow + corner-accent frame — reads
+ * as a dedicated scanner device rather than a plain edge-to-edge camera
+ * preview. Mounted once for the whole capture session; swapping it in and
+ * out of the tree per-pose caused expo-camera's session teardown/setup to
+ * race and hang.
+ */
+function PoseCameraStage({
   cameraRef,
+  width,
   tone,
+  scanning,
+  capturing,
+  captureProgress,
+  facing,
+  onToggleFacing,
+  allowFlip,
   overlayUri,
+  referenceImage,
   onReady,
 }: {
   cameraRef: React.RefObject<CameraView | null>;
+  /** Stage width, computed from screen width so it stays centered with even margins instead of running edge to edge. */
+  width: number;
   tone: "scanning" | "detected" | "noFace";
+  /** Drives the scan-line sweep — true only after START is tapped and the camera is actively looking (align/detected), false on the pre-start "ready" pose screen and once a shot's been taken or rejected. */
+  scanning: boolean;
+  /** True only during the "detected" step's countdown — shows the capture HUD over the bottom of the camera. */
+  capturing: boolean;
+  captureProgress: number;
+  facing: CameraType;
+  onToggleFacing: () => void;
+  /** Hide the flip button once the pose is mid-capture/reviewed — flipping while a shot is being taken would be confusing, not useful. */
+  allowFlip: boolean;
   /** When set, covers the live feed with the just-captured still (no camera remount). */
   overlayUri?: string;
+  /** Example photo for the current pose — shown as a small corner inset so the worker/foreman can compare the live feed against it without eating into the camera's own space. */
+  referenceImage?: number;
   onReady?: () => void;
 }) {
   const { colors } = useFaceTheme();
-  const ringColor = tone === "detected" ? colors.success : tone === "noFace" ? colors.danger : colors.primary;
+  const ringColor =
+    tone === "detected"
+      ? colors.warning
+      : tone === "noFace"
+        ? colors.danger
+        : colors.success;
 
   return (
-    <View style={styles.stageWrap}>
-      <View style={[styles.stageGlow, { shadowColor: ringColor }]} />
-      <View style={[styles.stageCircle, { backgroundColor: colors.backgroundDeep, borderColor: colors.glassBorderStrong }]}>
-        {/* Mounted once for the whole capture session — swapping this in and out of the
-            tree per-pose caused expo-camera's session teardown/setup to race and hang. */}
-        <CameraView ref={cameraRef} style={StyleSheet.absoluteFillObject} facing="front" onCameraReady={onReady} />
-        {overlayUri && <Image source={{ uri: overlayUri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />}
+    <View style={styles.stageCenter}>
+      <View
+        style={[
+          styles.photoStageGlow,
+          {
+            width,
+            height: PHOTO_STAGE_HEIGHT,
+            shadowColor: ringColor,
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.photoStage,
+          {
+            width,
+            height: PHOTO_STAGE_HEIGHT,
+            borderColor: ringColor,
+            backgroundColor: colors.backgroundDeep,
+          },
+        ]}
+      >
+        <CameraView
+          ref={cameraRef}
+          style={StyleSheet.absoluteFillObject}
+          facing={facing}
+          onCameraReady={onReady}
+        />
+        <ScanLineOverlay
+          active={scanning}
+          color={ringColor}
+          size={PHOTO_STAGE_HEIGHT}
+        />
+        {overlayUri && (
+          <Image
+            source={{ uri: overlayUri }}
+            // style={StyleSheet.absoluteFillObject}
+            // resizeMode="contain"
+          />
+        )}
+        {referenceImage != null && !overlayUri && (
+          <View
+            style={[
+              styles.referenceInset,
+              { borderColor: colors.glassBorderStrong },
+            ]}
+          >
+            <Image
+              source={referenceImage}
+              // style={StyleSheet.absoluteFillObject}
+              // resizeMode="contain"
+            />
+            {/* <View style={styles.referenceLabelPill}>
+              <Text style={styles.referenceLabelText}>EXAMPLE</Text>
+            </View> */}
+          </View>
+        )}
+        <View style={styles.liveBadge}>
+          <View style={[styles.liveDot, { backgroundColor: colors.danger }]} />
+          <Text style={styles.liveBadgeText}>LIVE</Text>
+        </View>
+        {allowFlip && (
+          <Pressable
+            onPress={onToggleFacing}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.flipButton,
+              pressed && { opacity: 0.7 },
+            ]}
+          >
+            <Ionicons name="camera-reverse-outline" size={20} color="#fff" />
+          </Pressable>
+        )}
+        {capturing && (
+          <View style={styles.captureHud} pointerEvents="none">
+            <LinearGradient
+              colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.82)"]}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <View style={styles.captureHudContent}>
+              <View style={styles.captureHudRow}>
+                <View
+                  style={[
+                    styles.captureHudDot,
+                    { backgroundColor: ringColor },
+                  ]}
+                />
+                <Text style={styles.captureHudLabel}>CAPTURING</Text>
+                <Text
+                  style={[styles.captureHudPercent, { color: ringColor }]}
+                >
+                  {Math.round(captureProgress * 100)}%
+                </Text>
+              </View>
+              <View style={styles.captureHudTrack}>
+                <View
+                  style={[
+                    styles.captureHudFill,
+                    {
+                      width: `${Math.round(captureProgress * 100)}%`,
+                      backgroundColor: ringColor,
+                      shadowColor: ringColor,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          </View>
+        )}
       </View>
-      <CornerBrackets size={CAMERA_STAGE_SIZE * 0.72} color={ringColor} />
+      <ScannerCornerAccents color={ringColor} />
     </View>
   );
 }
 
-function ProgressBar({ label, value, progress }: { label: string; value: string; progress: number }) {
+/**
+ * Lightweight L-shaped corner marks over the stage's own rounded rectangle
+ * (as opposed to CornerBrackets, which assumes a square box for the
+ * clock-out scanner) — the last touch that reads as a scanner frame rather
+ * than a bare camera preview.
+ */
+function ScannerCornerAccents({ color }: { color: string }) {
+  const len = 26;
+  const stroke = 3;
+  const inset = 10;
+
+  const corners = [
+    {
+      top: inset,
+      left: inset,
+      borderTopWidth: stroke,
+      borderLeftWidth: stroke,
+    },
+    {
+      top: inset,
+      right: inset,
+      borderTopWidth: stroke,
+      borderRightWidth: stroke,
+    },
+    {
+      bottom: inset,
+      left: inset,
+      borderBottomWidth: stroke,
+      borderLeftWidth: stroke,
+    },
+    {
+      bottom: inset,
+      right: inset,
+      borderBottomWidth: stroke,
+      borderRightWidth: stroke,
+    },
+  ] as const;
+
+  // Fills the stageCenter wrapper exactly — its only non-absolute child
+  // (photoStage) is what gives that wrapper its size, same trick as
+  // scan-out-face's stageGlow/CornerBrackets.
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+      {corners.map((corner, i) => (
+        <View
+          key={i}
+          style={[
+            styles.cornerAccent,
+            { width: len, height: len, borderColor: color },
+            corner,
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+function ProgressBar({
+  label,
+  value,
+  progress,
+}: {
+  label: string;
+  value: string;
+  progress: number;
+}) {
   const { colors, typography, spacing } = useFaceTheme();
 
   return (
     <View style={{ gap: spacing.xxs }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
         <Text style={typography.caption}>{label}</Text>
-        <Text style={[typography.caption, { color: colors.textPrimary }]}>{value}</Text>
+        <Text style={[typography.caption, { color: colors.textPrimary }]}>
+          {value}
+        </Text>
       </View>
-      <View style={[styles.progressTrack, { backgroundColor: colors.glassFill }]}>
-        <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%`, backgroundColor: colors.primary }]} />
-      </View>
-    </View>
-  );
-}
-
-function PoseDots({ total, current, done }: { total: number; current: number; done: boolean[] }) {
-  const { colors, spacing } = useFaceTheme();
-  return (
-    <View style={{ flexDirection: "row", gap: spacing.xs, justifyContent: "center" }}>
-      {Array.from({ length: total }).map((_, i) => (
+      <View
+        style={[styles.progressTrack, { backgroundColor: colors.glassFill }]}
+      >
         <View
-          key={i}
           style={[
-            styles.poseDot,
+            styles.progressFill,
             {
-              backgroundColor: done[i] ? colors.success : i === current ? colors.primary : colors.glassBorder,
+              width: `${Math.round(progress * 100)}%`,
+              backgroundColor: colors.primary,
             },
           ]}
         />
-      ))}
+      </View>
     </View>
   );
 }
@@ -312,10 +583,21 @@ export default function CaptureReferencePhotosScreen() {
   // re-fire on every render.
   const params = useLocalSearchParams<{ id: string }>();
   const id = String(params.id ?? "");
-  const { colors, typography, radius, spacing } = useFaceTheme();
+  const { colors, typography, spacing } = useFaceTheme();
+  // Bounded and centered rather than full-bleed — caps out so the stage
+  // reads as a device, not a stretched preview, on tablets.
+  const { width: windowWidth } = useWindowDimensions();
+  const stageWidth = Math.min(windowWidth - spacing.lg * 2, 340);
 
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
+  // Front-facing by default — a worker/foreman capturing their own reference
+  // photos usually holds the phone facing themselves — but the flip button
+  // lets someone else hold the phone and shoot with the back camera instead.
+  const [facing, setFacing] = useState<CameraType>("front");
+  const toggleFacing = useCallback(() => {
+    setFacing((f) => (f === "front" ? "back" : "front"));
+  }, []);
 
   const [step, setStep] = useState<Step>("intro");
   const [employee, setEmployee] = useState<EmployeeDto | null>(null);
@@ -339,7 +621,9 @@ export default function CaptureReferencePhotosScreen() {
   // import time, from the execution environment) so calling it behind this
   // check never changes which hooks fire between renders of this screen.
   // eslint-disable-next-line react-hooks/rules-of-hooks
-  const faceDetector = useImageFaceDetector ? useImageFaceDetector(FACE_DETECTOR_OPTIONS) : null;
+  const faceDetector = useImageFaceDetector
+    ? useImageFaceDetector(FACE_DETECTOR_OPTIONS)
+    : null;
 
   const detectFace = useCallback(
     async (uri: string): Promise<boolean> => {
@@ -350,7 +634,10 @@ export default function CaptureReferencePhotosScreen() {
       } catch (e) {
         // Detector errored on this image — don't block capture on it, just
         // skip validation for this shot.
-        console.warn("[capture-reference] face detection failed, allowing capture:", e);
+        console.warn(
+          "[capture-reference] face detection failed, allowing capture:",
+          e,
+        );
         return true;
       }
     },
@@ -392,7 +679,10 @@ export default function CaptureReferencePhotosScreen() {
       try {
         if (cancelled) return;
         if (!cameraRef.current) throw new Error("Camera is not ready yet.");
-        const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, skipProcessing: true });
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.8,
+          skipProcessing: true,
+        });
         if (cancelled || !photo) throw new Error("Could not capture a photo.");
 
         // Validate there's an actual face in the shot before accepting it —
@@ -433,7 +723,7 @@ export default function CaptureReferencePhotosScreen() {
     const timer = setTimeout(() => {
       if (poseIndex < POSES.length - 1 && !reachedReview) {
         setPoseIndex((i) => i + 1);
-        setStep("align");
+        setStep("ready");
       } else {
         setReachedReview(true);
         setStep("review");
@@ -451,14 +741,20 @@ export default function CaptureReferencePhotosScreen() {
       }, 120);
 
       try {
-        const device = `${Device.modelName ?? Platform.OS} · Reference Capture`.slice(0, 200);
+        const device =
+          `${Device.modelName ?? Platform.OS} · Reference Capture`.slice(
+            0,
+            200,
+          );
         const payload = allPhotos.map((photo, i) => ({
           uri: photo.uri,
           name: `${POSES[i].pose.toLowerCase()}-${Date.now()}.jpg`,
           type: "image/jpeg",
           pose: POSES[i].pose,
         }));
-        const { results } = await apiCreateFaceEnrollments(id, payload, { device });
+        const { results } = await apiCreateFaceEnrollments(id, payload, {
+          device,
+        });
         setUploadProgress(1);
 
         // The request itself succeeding (200 OK) doesn't mean every photo
@@ -468,7 +764,8 @@ export default function CaptureReferencePhotosScreen() {
         // success for photos that were never saved.
         const issues: Record<number, string> = {};
         results.forEach((r, i) => {
-          if ("error" in r) issues[i] = describeEnrollError(r.error, r.warnings);
+          if ("error" in r)
+            issues[i] = describeEnrollError(r.error, r.warnings);
         });
 
         if (Object.keys(issues).length > 0) {
@@ -496,17 +793,24 @@ export default function CaptureReferencePhotosScreen() {
 
   const handleContinue = useCallback(async () => {
     if (permission?.granted) {
-      setStep("align");
+      setStep("ready");
       return;
     }
     const result = await requestPermission();
     if (result.granted) {
       setPermissionDenied(false);
-      setStep("align");
+      setStep("ready");
     } else {
       setPermissionDenied(true);
     }
   }, [permission, requestPermission]);
+
+  // "ready" step's START button — the explicit per-pose gate. Nothing auto-fires
+  // (no timer, no capture) until this is tapped, same as scan-out-face's
+  // "Start Scanner" gate.
+  const handleStartCapture = useCallback(() => {
+    setStep("align");
+  }, []);
 
   const handleRetryUpload = useCallback(() => {
     setStep("uploading");
@@ -518,7 +822,7 @@ export default function CaptureReferencePhotosScreen() {
     setErrorMessage(null);
     setPhotoIssues({});
     setReachedReview(false);
-    setStep("align");
+    setStep("ready");
   }, []);
 
   // Retake a single pose from the review screen — lands back on review
@@ -548,26 +852,47 @@ export default function CaptureReferencePhotosScreen() {
     if (router.canGoBack()) {
       router.back();
     } else if (id) {
-      router.replace({ pathname: "/(foreman-stack)/workers/[id]", params: { id } });
+      router.replace({
+        pathname: "/(foreman-stack)/workers/[id]",
+        params: { id },
+      });
     }
   }, [id]);
 
   const stepHeader = useMemo(() => {
     switch (step) {
       case "intro":
-        return { title: "Capture Reference Photos", subtitle: "5 quick photos improve accuracy" };
+        return {
+          title: "Capture Reference Photos",
+          subtitle: "5 quick photos improve accuracy",
+        };
+      case "ready":
+        return {
+          title: `${currentPose.label} Photo`,
+          subtitle: `Photo ${poseIndex + 1} of ${POSES.length}`,
+        };
       case "align":
-        return { title: `${currentPose.label} Photo`, subtitle: currentPose.instruction };
+        return {
+          title: `${currentPose.label} Photo`,
+          subtitle: currentPose.instruction,
+        };
       case "detected":
-        return { title: "Face Detected", subtitle: "Hold still while we capture" };
+        return {
+          title: "Face Detected",
+          subtitle: "Hold still while we capture",
+        };
       case "noFace":
         return { title: "No Face Detected", subtitle: "Let's try that again" };
       case "captured":
-        return { title: `${currentPose.label} Captured`, subtitle: "Nice one!" };
+        return {
+          title: `${currentPose.label} Captured`,
+          subtitle: "Nice one!",
+        };
       case "review": {
         const issueCount = Object.keys(photoIssues).length;
         return {
-          title: issueCount > 0 ? "Some Photos Need Retaking" : "Review Your Photos",
+          title:
+            issueCount > 0 ? "Some Photos Need Retaking" : "Review Your Photos",
           subtitle:
             issueCount > 0
               ? `${issueCount} photo${issueCount === 1 ? "" : "s"} couldn't be used — retake them below`
@@ -581,44 +906,76 @@ export default function CaptureReferencePhotosScreen() {
       case "error":
         return { title: "Something Went Wrong", subtitle: errorMessage ?? "" };
     }
-  }, [step, currentPose, employee, errorMessage, photoIssues]);
+  }, [step, currentPose, poseIndex, employee, errorMessage, photoIssues]);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
   }, []);
 
-  // A pose reads as "done" once we actually have a photo for it — simpler
-  // and more robust than deriving it from poseIndex/step, which stops
-  // lining up once single-pose retakes from review can jump around.
-  const doneFlags = useMemo(() => POSES.map((_, i) => photos[i] != null), [photos]);
-
   return (
     <FaceScreenBackground>
       <Stack.Screen options={{ headerLeft: () => null }} />
-      <Header title={stepHeader?.title} subtitle={stepHeader?.subtitle} onBackPress={handleBack} />
+      {/* <Header
+        title={stepHeader?.title}
+        subtitle={stepHeader?.subtitle}
+        onBackPress={handleBack}
+      /> */}
 
-      <View style={[styles.body, { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.lg }]}>
+      <View
+        style={[
+          styles.body,
+          {
+            paddingHorizontal: spacing.lg,
+            paddingTop: spacing.sm,
+            paddingBottom: spacing.lg,
+          },
+        ]}
+      >
         {step === "intro" && (
           <View style={{ gap: spacing.lg, width: "100%" }}>
-            <View style={[styles.faceIconWrap, { backgroundColor: colors.glassFill, borderColor: colors.glassBorder }]}>
+            <View
+              style={[
+                styles.faceIconWrap,
+                {
+                  backgroundColor: colors.glassFill,
+                  borderColor: colors.glassBorder,
+                },
+              ]}
+            >
               <FaceOutlineIcon color={colors.primary} />
             </View>
 
-            <GlassPanel radius={radius.xl}>
+            <GlassPanel radius={5}>
               <View style={{ gap: spacing.md }}>
                 {POSES.map((p, i) => (
-                  <View key={p.pose} style={[styles.checklistRow, { gap: spacing.sm }]}>
+                  <View
+                    key={p.pose}
+                    style={[styles.checklistRow, { gap: spacing.sm }]}
+                  >
                     <View
                       style={[
                         styles.poseIndexWrap,
-                        { borderRadius: radius.sm, backgroundColor: colors.glassFill, borderColor: colors.glassBorder },
+                        {
+                          borderRadius: 5,
+                          backgroundColor: colors.glassFill,
+                          borderColor: colors.glassBorder,
+                        },
                       ]}
                     >
-                      <Text style={[typography.bodyStrong, { color: colors.primary }]}>{i + 1}</Text>
+                      <Text
+                        style={[
+                          typography.bodyStrong,
+                          { color: colors.primary },
+                        ]}
+                      >
+                        {i + 1}
+                      </Text>
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={typography.bodyStrong}>{p.label}</Text>
-                      <Text style={[typography.caption, { marginTop: 2 }]}>{p.instruction}</Text>
+                      <Text style={[typography.caption, { marginTop: 2 }]}>
+                        {p.instruction}
+                      </Text>
                     </View>
                   </View>
                 ))}
@@ -626,8 +983,14 @@ export default function CaptureReferencePhotosScreen() {
             </GlassPanel>
 
             {permissionDenied && (
-              <Text style={[typography.caption, { color: colors.warning, textAlign: "center" }]}>
-                Camera access is required to capture reference photos. Please allow it in settings and try again.
+              <Text
+                style={[
+                  typography.caption,
+                  { color: colors.warning, textAlign: "center" },
+                ]}
+              >
+                Camera access is required to capture reference photos. Please
+                allow it in settings and try again.
               </Text>
             )}
 
@@ -635,59 +998,144 @@ export default function CaptureReferencePhotosScreen() {
           </View>
         )}
 
-        {(step === "align" || step === "detected" || step === "noFace" || step === "captured") && (
-          <View style={styles.stageScreen}>
-            <PoseDots total={POSES.length} current={poseIndex} done={doneFlags} />
-            <View style={{ marginTop: spacing.lg }}>
-              <FaceCameraStage
+        {(step === "ready" ||
+          step === "align" ||
+          step === "detected" ||
+          step === "noFace" ||
+          step === "captured") && (
+          <View style={styles.poseScreen}>
+            <View style={styles.poseHeader}>
+              <View
+                style={{
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "flex-start",
+                  gap: spacing.sm,
+                }}
+              >
+                <Image
+                  source={currentPose.refImage}
+                  style={{ width: 120, height: 160 }}
+                  resizeMode="contain"
+                />
+
+                <View
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: spacing.sm,
+                  }}
+                >
+                  <View
+                    style={[
+                      styles.numberBadge,
+                      { backgroundColor: colors.success },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        typography.title,
+                        { color: colors.textOnPrimary, fontSize: 20 },
+                      ]}
+                    >
+                      {poseIndex + 1}
+                    </Text>
+                  </View>
+
+                  <Text style={[styles.poseTitle, { color: colors.success }]}>
+                    {currentPose.label.toUpperCase()}
+                  </Text>
+                  <Text style={[typography.body, styles.poseInstructionText]}>
+                    {currentPose.instruction}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.photoStageWrap}>
+              {/* Camera is mounted once for the whole capture session (see
+                  PoseCameraStage) and stays mounted through "ready" too —
+                  swapping it in/out per step caused expo-camera's session
+                  teardown/setup to race and hang. */}
+              <PoseCameraStage
                 cameraRef={cameraRef}
-                tone={step === "align" ? "scanning" : step === "noFace" ? "noFace" : "detected"}
-                overlayUri={step === "captured" ? photos[poseIndex]?.uri : undefined}
+                width={stageWidth}
+                tone={
+                  step === "align" || step === "ready"
+                    ? "scanning"
+                    : step === "noFace"
+                      ? "noFace"
+                      : "detected"
+                }
+                // Only once the worker/foreman has tapped START (align/detected) —
+                // "ready" is just the static pre-start pose screen, not scanning yet.
+                scanning={step === "align" || step === "detected"}
+                facing={facing}
+                onToggleFacing={toggleFacing}
+                allowFlip={step === "ready" || step === "align"}
+                capturing={step === "detected"}
+                captureProgress={captureProgress}
               />
             </View>
 
-            {step === "align" && (
-              <>
-                <Text style={[typography.bodyStrong, { marginTop: spacing.xl }]}>{currentPose.instruction}</Text>
-                <Text style={[typography.caption, { marginTop: spacing.xxs, color: colors.primary }]}>
-                  Photo {poseIndex + 1} of {POSES.length}
-                </Text>
-              </>
-            )}
+            <View style={[styles.poseFooter, { paddingTop: spacing.md }]}>
+              {step === "ready" && (
+                <PrimaryButton
+                  label="START"
+                  tone="success"
+                  onPress={handleStartCapture}
+                />
+              )}
 
-            {step === "detected" && (
-              <>
-                <Text style={[typography.bodyStrong, { marginTop: spacing.xl, color: colors.success }]}>Great! Face detected</Text>
-                <Text style={[typography.caption, { marginTop: spacing.xxs }]}>Hold still while we capture</Text>
-                <View style={{ width: "100%", marginTop: spacing.lg }}>
-                  <ProgressBar label="Capturing" value={`${Math.round(captureProgress * 100)}%`} progress={captureProgress} />
-                </View>
-              </>
-            )}
+              {/* "detected" (capturing) has no footer content — its progress
+                  now shows as a HUD overlaid on the camera itself, see
+                  PoseCameraStage's captureHud. */}
 
-            {step === "noFace" && (
-              <>
-                <View style={[styles.checkBadge, { marginTop: spacing.lg, backgroundColor: colors.danger }]}>
-                  <SmallXIcon color={colors.textOnPrimary} />
+              {step === "noFace" && (
+                <View style={{ alignItems: "center", gap: spacing.xs }}>
+                  <Text
+                    style={[typography.bodyStrong, { color: colors.danger }]}
+                  >
+                    No face detected
+                  </Text>
+                  <Text style={[typography.caption, { textAlign: "center" }]}>
+                    Make sure your face is clearly visible and well lit
+                  </Text>
+                  <View style={{ width: "100%", marginTop: spacing.xs }}>
+                    <PrimaryButton
+                      label="TRY AGAIN"
+                      onPress={handleRetryNoFace}
+                    />
+                  </View>
                 </View>
-                <Text style={[typography.bodyStrong, { marginTop: spacing.sm, color: colors.danger }]}>No face detected</Text>
-                <Text style={[typography.caption, { marginTop: spacing.xxs, textAlign: "center" }]}>
-                  Make sure your face is clearly visible and well lit
-                </Text>
-                <View style={{ width: "100%", marginTop: spacing.lg }}>
-                  <PrimaryButton label="TRY AGAIN" onPress={handleRetryNoFace} />
-                </View>
-              </>
-            )}
+              )}
 
-            {step === "captured" && (
-              <>
-                <View style={[styles.checkBadge, { marginTop: spacing.lg, backgroundColor: colors.success }]}>
-                  <CheckIcon color={colors.textOnPrimary} />
+              {step === "captured" && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: spacing.xs,
+                  }}
+                >
+                  <View
+                    style={[
+                      styles.checkBadgeSmall,
+                      { backgroundColor: colors.success },
+                    ]}
+                  >
+                    <CheckIcon color={colors.textOnPrimary} />
+                  </View>
+                  <Text
+                    style={[typography.bodyStrong, { color: colors.success }]}
+                  >
+                    {currentPose.label} captured
+                  </Text>
                 </View>
-                <Text style={[typography.bodyStrong, { marginTop: spacing.sm, color: colors.success }]}>{currentPose.label} captured</Text>
-              </>
-            )}
+              )}
+            </View>
           </View>
         )}
 
@@ -700,36 +1148,56 @@ export default function CaptureReferencePhotosScreen() {
                   <Pressable
                     key={p.pose}
                     onPress={() => handleRetakePose(i)}
-                    style={({ pressed }) => [styles.reviewTile, pressed && { opacity: 0.85 }]}
+                    style={({ pressed }) => [
+                      styles.reviewTile,
+                      pressed && { opacity: 0.85 },
+                    ]}
                   >
                     <View
                       style={[
                         styles.reviewThumb,
                         {
-                          borderRadius: radius.md,
-                          borderColor: issue ? colors.danger : colors.glassBorder,
+                          borderRadius: 5,
+                          borderColor: issue
+                            ? colors.danger
+                            : colors.glassBorder,
                           borderWidth: issue ? 2 : 1,
                           backgroundColor: colors.backgroundDeep,
                         },
                       ]}
                     >
                       {photos[i] && (
-                        <Image source={{ uri: photos[i].uri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+                        <Image
+                          source={{ uri: photos[i].uri }}
+                          style={StyleSheet.absoluteFillObject}
+                          resizeMode="cover"
+                        />
                       )}
                       {issue && (
                         <View
                           style={[
                             StyleSheet.absoluteFillObject,
-                            { backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" },
+                            {
+                              backgroundColor: "rgba(0,0,0,0.4)",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            },
                           ]}
                         >
                           <SmallXIcon color={colors.textOnPrimary} />
                         </View>
                       )}
                     </View>
-                    <Text style={[typography.caption, { marginTop: spacing.xxs }]}>{p.label}</Text>
                     <Text
-                      style={[typography.caption, { color: issue ? colors.danger : colors.primary }]}
+                      style={[typography.caption, { marginTop: spacing.xxs }]}
+                    >
+                      {p.label}
+                    </Text>
+                    <Text
+                      style={[
+                        typography.caption,
+                        { color: issue ? colors.danger : colors.primary },
+                      ]}
                       numberOfLines={1}
                     >
                       {issue ?? "Retake"}
@@ -744,18 +1212,28 @@ export default function CaptureReferencePhotosScreen() {
               onPress={handleSaveReview}
               disabled={Object.keys(photoIssues).length > 0}
             />
-            <PrimaryButton label="RETAKE ALL" tone="glass" onPress={handleStartOver} />
+            <PrimaryButton
+              label="RETAKE ALL"
+              tone="glass"
+              onPress={handleStartOver}
+            />
           </View>
         )}
 
         {step === "uploading" && (
           <View style={styles.stageScreen}>
-            <GlassPanel radius={radius.xl} style={{ width: "100%" }}>
+            <GlassPanel radius={5} style={{ width: "100%" }}>
               <View style={{ gap: spacing.md }}>
-                <ProgressBar label="Uploading reference photos" value={`${Math.round(uploadProgress * 100)}%`} progress={uploadProgress} />
+                <ProgressBar
+                  label="Uploading reference photos"
+                  value={`${Math.round(uploadProgress * 100)}%`}
+                  progress={uploadProgress}
+                />
               </View>
               <View style={{ alignItems: "center", marginTop: spacing.lg }}>
-                <Text style={typography.caption}>Saving {POSES.length} photos…</Text>
+                <Text style={typography.caption}>
+                  Saving {POSES.length} photos…
+                </Text>
               </View>
             </GlassPanel>
           </View>
@@ -763,18 +1241,41 @@ export default function CaptureReferencePhotosScreen() {
 
         {step === "done" && (
           <View style={styles.stageScreen}>
-            <View style={[styles.outcomeIconGlow, { shadowColor: colors.success }]}>
+            <View
+              style={[styles.outcomeIconGlow, { shadowColor: colors.success }]}
+            >
               <CheckCircleIcon color={colors.success} />
             </View>
-            <Text style={[typography.title, { marginTop: spacing.lg, color: colors.success }]}>PHOTOS SUBMITTED</Text>
-            {employee?.fullName && <Text style={[typography.headline, { marginTop: spacing.xxs }]}>{employee.fullName}</Text>}
-            <Text style={[typography.body, { marginTop: spacing.xxs, textAlign: "center" }]}>
+            <Text
+              style={[
+                typography.title,
+                { marginTop: spacing.lg, color: colors.success },
+              ]}
+            >
+              PHOTOS SUBMITTED
+            </Text>
+            {employee?.fullName && (
+              <Text style={[typography.headline, { marginTop: spacing.xxs }]}>
+                {employee.fullName}
+              </Text>
+            )}
+            <Text
+              style={[
+                typography.body,
+                { marginTop: spacing.xxs, textAlign: "center" },
+              ]}
+            >
               All {POSES.length} reference photos were uploaded
             </Text>
 
-            <GlassPanel radius={radius.md} style={{ width: "100%", marginTop: spacing.lg }} contentPadding={16}>
+            <GlassPanel
+              radius={5}
+              style={{ width: "100%", marginTop: spacing.lg }}
+              contentPadding={16}
+            >
               <Text style={[typography.caption, { textAlign: "center" }]}>
-                A supervisor will review and approve these photos before they're used for verification.
+                A supervisor will review and approve these photos before they're
+                used for verification.
               </Text>
             </GlassPanel>
 
@@ -786,16 +1287,39 @@ export default function CaptureReferencePhotosScreen() {
 
         {step === "error" && (
           <View style={styles.stageScreen}>
-            <View style={[styles.outcomeIconGlow, { shadowColor: colors.danger }]}>
+            <View
+              style={[styles.outcomeIconGlow, { shadowColor: colors.danger }]}
+            >
               <XCircleIcon color={colors.danger} />
             </View>
-            <Text style={[typography.title, { marginTop: spacing.lg, color: colors.danger }]}>UPLOAD FAILED</Text>
-            <Text style={[typography.body, { marginTop: spacing.xxs, textAlign: "center" }]}>
+            <Text
+              style={[
+                typography.title,
+                { marginTop: spacing.lg, color: colors.danger },
+              ]}
+            >
+              UPLOAD FAILED
+            </Text>
+            <Text
+              style={[
+                typography.body,
+                { marginTop: spacing.xxs, textAlign: "center" },
+              ]}
+            >
               {errorMessage ?? "Something went wrong."}
             </Text>
 
-            <View style={{ width: "100%", marginTop: spacing.xl, gap: spacing.sm }}>
-              <PrimaryButton label="TRY AGAIN" onPress={photos.length === POSES.length ? handleRetryUpload : handleStartOver} />
+            <View
+              style={{ width: "100%", marginTop: spacing.xl, gap: spacing.sm }}
+            >
+              <PrimaryButton
+                label="TRY AGAIN"
+                onPress={
+                  photos.length === POSES.length
+                    ? handleRetryUpload
+                    : handleStartOver
+                }
+              />
               <PrimaryButton label="CANCEL" tone="glass" onPress={handleDone} />
             </View>
           </View>
@@ -864,28 +1388,180 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  stageWrap: {
-    width: CAMERA_STAGE_SIZE,
-    height: CAMERA_STAGE_SIZE,
+  // Pose capture screen (align/detected/noFace/captured) — number badge +
+  // title + instruction up top, one large full-bleed photo below, matching
+  // the reference design rather than the small circular camera "puck" used
+  // elsewhere in this module.
+  poseScreen: {
+    flex: 1,
+    width: "100%",
+  },
+  poseHeader: {
+    alignItems: "center",
+    paddingTop: 4,
+  },
+  numberBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
   },
-  stageGlow: {
-    position: "absolute",
-    width: CAMERA_STAGE_SIZE,
-    height: CAMERA_STAGE_SIZE,
-    borderRadius: CAMERA_STAGE_SIZE / 2,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 26,
-    elevation: 12,
+  poseTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    marginTop: 10,
   },
-  stageCircle: {
-    width: CAMERA_STAGE_SIZE - 16,
-    height: CAMERA_STAGE_SIZE - 16,
-    borderRadius: (CAMERA_STAGE_SIZE - 16) / 2,
+  poseInstructionText: {
+    textAlign: "center",
+    marginTop: 6,
+  },
+  photoStageWrap: {
+    // Bounded, not flex:1 — the camera used to eat the whole remaining
+    // screen height, leaving no room for the reference inset or the
+    // footer controls below it.
+    height: PHOTO_STAGE_HEIGHT,
+    marginTop: 12,
+    alignItems: "center",
+  },
+  stageCenter: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Soft colored glow behind the stage — reads as a device casting light,
+  // not just a bordered rectangle.
+  photoStageGlow: {
+    position: "absolute",
+    borderRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 22,
+    elevation: 10,
+  },
+  photoStage: {
     overflow: "hidden",
+    borderRadius: 12,
     borderWidth: 2,
+  },
+  liveBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(0,0,0,0.62)",
+  },
+  liveDot: { width: 7, height: 7, borderRadius: 4 },
+  liveBadgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  flipButton: {
+    position: "absolute",
+    bottom: 10,
+    right: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.62)",
+  },
+  // HUD strip for the "detected" (capturing) countdown — fades the camera
+  // to black behind it rather than sitting on a flat panel, so it reads as
+  // part of the camera itself, not a separate control below it.
+  captureHud: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    overflow: "hidden",
+  },
+  captureHudContent: {
+    paddingHorizontal: 16,
+    paddingTop: 26,
+    paddingBottom: 14,
+  },
+  captureHudRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginBottom: 8,
+  },
+  captureHudDot: { width: 6, height: 6, borderRadius: 3 },
+  captureHudLabel: {
+    flex: 1,
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.4,
+  },
+  captureHudPercent: {
+    fontSize: 14,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
+  },
+  captureHudTrack: {
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    overflow: "hidden",
+  },
+  captureHudFill: {
+    height: "100%",
+    borderRadius: 3,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  cornerAccent: {
+    position: "absolute",
+    borderRadius: 4,
+  },
+  referenceInset: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 80,
+    height: 128,
+    borderRadius: 10,
+    borderWidth: 2,
+    overflow: "hidden",
+    // The bundled reference PNGs are full mockup cards (number + title +
+    // instruction on a white background, photo below) — "contain" shows
+    // the whole thing undistorted; a light background matches the card's
+    // own white top section instead of showing dark letterbox bars.
+    backgroundColor: "#F3F4F6",
+  },
+  referenceLabelPill: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 2,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+  },
+  referenceLabelText: {
+    color: "#fff",
+    fontSize: 7,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+  },
+  poseFooter: {
+    width: "100%",
+    minHeight: 64,
+    justifyContent: "center",
   },
   progressTrack: {
     height: 6,
@@ -896,15 +1572,10 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: 3,
   },
-  poseDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  checkBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  checkBadgeSmall: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },

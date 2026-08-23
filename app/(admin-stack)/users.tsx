@@ -954,7 +954,7 @@ const modalStyles = StyleSheet.create({
     gap: 6,
   },
   footerBtnText: { fontSize: 15, fontWeight: "700" },
-  createBtn: { backgroundColor: "#f59e0b" },
+  createBtn: { backgroundColor: "#16A34A" },
   createBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
 });
 
@@ -973,7 +973,7 @@ const styles = StyleSheet.create({
   addBtn: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f59e0b",
+    backgroundColor: "#16A34A",
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
@@ -1067,7 +1067,7 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 16, textAlign: "center", marginTop: 12 },
   retryBtn: {
     marginTop: 16,
-    backgroundColor: "#3b82f6",
+    backgroundColor: "#16A34A",
     paddingHorizontal: 24,
     paddingVertical: 10,
     borderRadius: 8,

@@ -31,7 +31,7 @@ const STEPS: Step[] = [
     icon: "home",
     title: "Welcome to Your Dashboard",
     body: "This is your Home screen. You'll see today's date, your assigned sites, how many team members have been scanned, and the current day status at a glance.",
-    accent: "#38bdf8",
+    accent: "#22c55e",
   },
   {
     icon: "qr-code",
@@ -85,11 +85,11 @@ const palette = {
   dark: {
     overlay: "rgba(0,0,0,0.82)",
     card: "#0f172a",
-    cardBorder: "rgba(56,189,248,0.25)",
+    cardBorder: "rgba(34,197,94,0.25)",
     text: "#f1f5f9",
     muted: "#94a3b8",
     dot: "#334155",
-    dotActive: "#38bdf8",
+    dotActive: "#22c55e",
     skip: "#64748b",
   },
   light: {
@@ -99,7 +99,7 @@ const palette = {
     text: "#0f172a",
     muted: "#64748b",
     dot: "#cbd5e1",
-    dotActive: "#262D68",
+    dotActive: "#16A34A",
     skip: "#94a3b8",
   },
 };

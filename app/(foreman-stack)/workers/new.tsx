@@ -117,7 +117,7 @@ export default function NewWorker() {
       const employeeId = created?.employee?.id;
 
       if (!employeeId) {
-        throw new Error("Employee created but id missing.");
+        throw new Error("Personel member created but ID is missing.");
       }
 
       if (photo) {
@@ -269,7 +269,7 @@ export default function NewWorker() {
 }
 
 const ORANGE = "#ea580c";
-const NAVY = "#262D68";
+const NAVY = "#16A34A";
 
 const styles = StyleSheet.create({
   container: { padding: 16, gap: 12 },

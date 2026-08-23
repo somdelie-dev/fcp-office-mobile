@@ -1,6 +1,6 @@
 import React from "react";
 import { StyleSheet, View, ViewStyle, type StyleProp } from "react-native";
-import { useTheme } from "../lib/themeContext";
+import { useAppTheme } from "../lib/appTheme";
 
 type Props = {
   children: React.ReactNode;
@@ -8,13 +8,14 @@ type Props = {
 };
 
 export function GlassCard({ children, style }: Props) {
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
+  const { isDark, colors } = useAppTheme();
 
+  // Elevated surface + green-tinted border, matching the Face Scan module's
+  // glass card treatment instead of the old blue tint.
   const cardStyle = isDark
     ? {
-        backgroundColor: "rgba(15, 23, 42, 0.8)",
-        borderColor: "rgba(56, 189, 248, 0.25)",
+        backgroundColor: "rgba(11, 24, 38, 0.85)",
+        borderColor: colors.primaryGreenDim,
       }
     : {
         backgroundColor: "rgba(255,255,255,0.72)",

@@ -920,11 +920,13 @@ export type ApiUser = {
   actingForeman?: {
     foremanId: string;
     name: string;
+    photoUrl?: string | null;
   } | null;
   // For assistant foremen: list of foremen they can act for
   availableForemen?: Array<{
     foremanId: string;
     name: string;
+    photoUrl?: string | null;
   }>;
 };
 
@@ -1136,6 +1138,115 @@ export async function apiForemanDay(siteId: string, dateISO: string) {
   return apiFetch(`/api/app/foreman/day?siteId=${qSite}&dateISO=${qDate}`);
 }
 
+export type ScanOutPendingEmployee = {
+  id: string;
+  fullName: string;
+  faceImageUrl: string | null;
+  scannedInAtISO: string;
+};
+
+/** Employees scanned in today at this site who haven't been scanned out yet, plus a total-scanned-in count for the scanner's session counter. */
+export async function apiForemanScanOutPending(
+  siteId: string,
+  dateISO: string,
+): Promise<{ employees: ScanOutPendingEmployee[]; totalScannedInToday: number }> {
+  const qSite = encodeURIComponent(siteId);
+  const qDate = encodeURIComponent(dateISO);
+  return apiFetch(
+    `/api/app/foreman/day/scan-out-pending?siteId=${qSite}&dateISO=${qDate}`,
+  ) as Promise<{ employees: ScanOutPendingEmployee[]; totalScannedInToday: number }>;
+}
+
+export type ForemanScanOutDto = {
+  id: string;
+  employeeName: string;
+  faceImageUrl: string | null;
+  siteId: string;
+  siteName: string;
+  scannedOutAtISO: string;
+  method: "PHOTO" | "FINGERPRINT" | "FACE" | null;
+  confidence: number | null;
+  verificationStatus: "VERIFIED" | "PENDING_REVIEW" | "REJECTED" | null;
+};
+
+/** Last 7 days of scan-out events across every site this foreman worked. */
+export async function apiForemanRecentScanOuts(): Promise<{
+  scanOuts: ForemanScanOutDto[];
+}> {
+  return apiFetch("/api/app/foreman/scan-outs/recent", {
+    auth: true,
+  }) as Promise<{ scanOuts: ForemanScanOutDto[] }>;
+}
+
+// ─── CONTINUOUS FACE SCAN-OUT ───────────────────────────────────────────────
+//
+// "Here's a face, tell me who this is" instead of "verify this specific
+// employee" — the continuous-scanner counterpart to apiScanOutFace, which
+// stays in place for the per-worker manual "Verify" screen. See
+// FCP's scan-out-identify/route.ts for the matching/margin/auto-record
+// logic; this client is a thin pass-through.
+
+export type ScanOutIdentifyResult =
+  | {
+      ok: true;
+      recorded: true;
+      employee: { id: string; fullName: string };
+      method: "FACE";
+      confidence: number;
+      verificationStatus: "VERIFIED";
+      scannedOutAt: string;
+    }
+  | {
+      ok: true;
+      recorded: false;
+      needsConfirmation: true;
+      employee: { id: string; fullName: string };
+      method: "FACE";
+      confidence: number;
+      matchedEnrollmentId: string;
+    }
+  | {
+      ok: false;
+      error: "no_candidates" | "no_face_detected" | "multiple_faces_detected" | "low_quality" | "no_match" | "service_unavailable";
+      warnings?: string[];
+    };
+
+export async function apiScanOutIdentify(input: {
+  siteId: string;
+  dateISO: string;
+  device: string;
+  image: string;
+  checkLiveness?: boolean;
+}): Promise<ScanOutIdentifyResult> {
+  return apiFetch("/api/app/attendance/scan-out-identify", {
+    method: "POST",
+    body: JSON.stringify(input),
+    headers: { "content-type": "application/json" },
+    auth: true,
+  }) as Promise<ScanOutIdentifyResult>;
+}
+
+export type ScanOutConfirmResult =
+  | { ok: true; recorded: true; scannedOutAt: string }
+  | { ok: true; recorded: false; alreadyClockedOut: true }
+  | { ok: false; error: string };
+
+export async function apiScanOutConfirm(input: {
+  siteId: string;
+  dateISO: string;
+  employeeId: string;
+  device: string;
+  confidence: number;
+  matchedEnrollmentId?: string;
+}): Promise<ScanOutConfirmResult> {
+  return apiFetch("/api/app/attendance/scan-out-confirm", {
+    method: "POST",
+    body: JSON.stringify(input),
+    headers: { "content-type": "application/json" },
+    auth: true,
+  }) as Promise<ScanOutConfirmResult>;
+}
+
 /**
  * Ensure a SiteDay exists for the given site and date.
  * Creates one if it doesn't exist, returns the existing one if it does.
@@ -1305,13 +1416,22 @@ export async function apiSupervisorGetDayAcceptances(
 // ADMIN: TIMESHEETS (JWT Bearer)
 // -------------------------
 
+export type AdminTimesheetsPeriodDto = {
+  id: string;
+  startISO: string;
+  endISO: string;
+};
+
 export async function apiAdminTimesheets(query?: {
   q?: string;
   status?: "ALL" | TimesheetStatus;
   period?: string; // YYYY-MM-DD_YYYY-MM-DD (optional)
   supervisorId?: string;
   limit?: number;
-}): Promise<{ timesheets: TimesheetListRowDto[] }> {
+}): Promise<{
+  timesheets: TimesheetListRowDto[];
+  period?: AdminTimesheetsPeriodDto;
+}> {
   const params = new URLSearchParams();
   if (query?.q) params.append("q", query.q);
   if (query?.status && query.status !== "ALL")
@@ -1359,6 +1479,24 @@ export async function apiAdminMarkPaid(id: string) {
     body: JSON.stringify({}),
     auth: true,
   });
+}
+
+/**
+ * Path for downloading a timesheet PDF as an admin.
+ *
+ * There is no dedicated `/api/app/admin/timesheets/:id/pdf` route, but the
+ * supervisor PDF route (`/api/app/supervisor/timesheets/:id/pdf`) already
+ * accepts the ADMIN role and parses the same composite id
+ * (`startISO_endISO_foremanId_siteId`) that `apiAdminTimesheets` produces, so
+ * this reuses it instead of adding a second PDF generator. Callers still need
+ * to build the full URL (getApiBase() + this path) and pass the bearer token
+ * themselves via File.downloadFileAsync, same as the foreman PDF flow.
+ */
+export function adminTimesheetPdfPath(id: string, siteId?: string): string {
+  const params = new URLSearchParams();
+  if (siteId) params.set("siteId", siteId);
+  const qs = params.toString();
+  return `/api/app/supervisor/timesheets/${encodeURIComponent(id)}/pdf${qs ? `?${qs}` : ""}`;
 }
 
 export type CreateEmployeeInput = {
@@ -1791,6 +1929,22 @@ export async function apiForemanTimesheetDetail(id: string) {
     `/api/app/foreman/timesheets-mobile/${encodeURIComponent(id)}`,
     { auth: true },
   );
+}
+
+/**
+ * Foreman's timesheet rows for one fortnight (one row per site worked that
+ * period, all sharing the same composite `id`) — omit periodId for the
+ * current fortnight. Used to resolve the timesheet id to download as a PDF
+ * without the client having to construct the id itself.
+ */
+export async function apiForemanTimesheetsForPeriod(
+  periodId?: string,
+): Promise<{
+  timesheets: TimesheetListRowDto[];
+  period?: { id: string; startISO: string; endISO: string };
+}> {
+  const qs = periodId ? `?period=${encodeURIComponent(periodId)}` : "";
+  return apiFetch(`/api/app/foreman/timesheets-mobile${qs}`, { auth: true });
 }
 
 // -------------------------

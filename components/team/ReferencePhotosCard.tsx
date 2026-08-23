@@ -121,7 +121,7 @@ export default function ReferencePhotosCard({
   angles = DEFAULT_ANGLES,
   onCapturePress,
 }: ReferencePhotosCardProps) {
-  const { colors, typography, radius, spacing } = useFaceTheme();
+  const { colors, typography, spacing } = useFaceTheme();
 
   const progress = useMemo(() => {
     const done = angles.filter((a) => a.complete).length;
@@ -131,7 +131,7 @@ export default function ReferencePhotosCard({
   const completedCount = angles.filter((a) => a.complete).length;
 
   return (
-    <GlassPanel radius={radius.xl}>
+    <GlassPanel radius={5}>
       <View style={[styles.headerRow, { marginBottom: spacing.lg }]}>
         <View style={[styles.headerTextBlock, { paddingRight: spacing.md }]}>
           <Text style={typography.headline}>Reference Photos</Text>
@@ -139,7 +139,7 @@ export default function ReferencePhotosCard({
             {completedCount} of {angles.length} angles captured
           </Text>
         </View>
-        <ProgressRing progress={progress} trackColor={colors.glassBorder} fillColor={colors.primary} textStyle={typography.bodyStrong} />
+        <ProgressRing progress={progress} trackColor={colors.glassBorder} fillColor={colors.success} textStyle={typography.bodyStrong} />
       </View>
 
       <View style={[styles.chipGrid, { gap: spacing.xs, marginBottom: spacing.lg }]}>
@@ -157,7 +157,7 @@ export default function ReferencePhotosCard({
         onPress={onCapturePress}
         style={({ pressed }) => [
           styles.captureButton,
-          { gap: spacing.xs, paddingVertical: spacing.sm + 2, borderRadius: radius.md, backgroundColor: colors.primary },
+          { gap: spacing.xs, paddingVertical: spacing.sm + 2, borderRadius: 5, backgroundColor: colors.success },
           pressed && { opacity: 0.9 },
         ]}
       >

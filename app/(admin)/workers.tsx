@@ -522,7 +522,7 @@ export default function AdminWorkersScreen() {
             <View style={styles.loadingWrap}>
               <ActivityIndicator
                 size="large"
-                color={isDark ? "#38bdf8" : "#0ea5e9"}
+                color={isDark ? "#22c55e" : "#16A34A"}
               />
               <Text style={[styles.loadingText, { color: textSub }]}>
                 Loading team...
@@ -585,8 +585,8 @@ export default function AdminWorkersScreen() {
                           backgroundColor:
                             pageSize === size
                               ? isDark
-                                ? "#38bdf8"
-                                : "#0ea5e9"
+                                ? "#22c55e"
+                                : "#16A34A"
                               : "transparent",
                         },
                       ]}
@@ -861,8 +861,8 @@ export default function AdminWorkersScreen() {
                     {
                       backgroundColor: pressed
                         ? isDark
-                          ? "rgba(56,189,248,0.1)"
-                          : "rgba(14,165,233,0.06)"
+                          ? "rgba(34,197,94,0.1)"
+                          : "rgba(22,163,74,0.06)"
                         : "transparent",
                       borderRadius: 8,
                     },
@@ -873,7 +873,7 @@ export default function AdminWorkersScreen() {
                     setActionsId(null);
                   }}
                 >
-                  <Eye size={16} color={isDark ? "#38bdf8" : "#0ea5e9"} />
+                  <Eye size={16} color={isDark ? "#22c55e" : "#16A34A"} />
                   <Text
                     style={{ color: textMain, fontSize: 14, fontWeight: "700" }}
                   >
@@ -1495,7 +1495,7 @@ function SortChip({
   isDark: boolean;
 }) {
   const isActive = currentField === field;
-  const activeColor = isDark ? "#38bdf8" : "#0ea5e9";
+  const activeColor = isDark ? "#22c55e" : "#16A34A";
 
   return (
     <Pressable
@@ -1505,8 +1505,8 @@ function SortChip({
         {
           backgroundColor: isActive
             ? isDark
-              ? "rgba(56,189,248,0.18)"
-              : "rgba(14,165,233,0.1)"
+              ? "rgba(34,197,94,0.18)"
+              : "rgba(22,163,74,0.1)"
             : isDark
               ? "rgba(51,65,85,0.4)"
               : "rgba(255,255,255,0.9)",
@@ -1673,15 +1673,15 @@ function RoleBadge({
           styles.roleBadge,
           {
             backgroundColor: isDark
-              ? "rgba(56,189,248,0.2)"
-              : "rgba(14,165,233,0.12)",
+              ? "rgba(34,197,94,0.2)"
+              : "rgba(22,163,74,0.12)",
           },
         ]}
       >
         <Text
           style={[
             styles.roleBadgeText,
-            { color: isDark ? "#38bdf8" : "#0ea5e9" },
+            { color: isDark ? "#22c55e" : "#16A34A" },
           ]}
         >
           Foreman
@@ -1892,16 +1892,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   pillActive: {
-    backgroundColor: "#bfdbfe",
-    borderColor: "#60a5fa",
+    backgroundColor: "#bbf7d0",
+    borderColor: "#4ade80",
   },
   pillInactive: {
     backgroundColor: "rgba(255,255,255,0.7)",
     borderColor: "rgba(148,163,184,0.6)",
   },
   pillActiveDark: {
-    backgroundColor: "rgba(56,189,248,0.22)",
-    borderColor: "rgba(56,189,248,0.7)",
+    backgroundColor: "rgba(34,197,94,0.22)",
+    borderColor: "rgba(34,197,94,0.7)",
   },
   pillInactiveDark: {
     backgroundColor: "rgba(15,23,42,0.9)",
@@ -2112,7 +2112,7 @@ const modalStyles = StyleSheet.create({
     borderRadius: 6,
   },
   submitBtn: {
-    backgroundColor: "#0ea5e9",
+    backgroundColor: "#16A34A",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 6,

@@ -170,7 +170,7 @@ export const Spacing = {
 // ---------------------------------------------------------------------------
 
 export const Radius = {
-  sm: 12,
+  sm: 10,
   md: 18,
   lg: 22,
   xl: 28, // Standard card radius per spec
@@ -188,7 +188,9 @@ const fontFamily = Platform.select({
   default: "System",
 });
 
-export function getTypography(colors: FaceColorPalette): Record<string, TextStyle> {
+export function getTypography(
+  colors: FaceColorPalette,
+): Record<string, TextStyle> {
   return {
     display: {
       fontFamily,
@@ -238,7 +240,11 @@ export function getTypography(colors: FaceColorPalette): Record<string, TextStyl
       color: colors.textTertiary,
     },
     mono: {
-      fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }),
+      fontFamily: Platform.select({
+        ios: "Menlo",
+        android: "monospace",
+        default: "monospace",
+      }),
       fontSize: 13,
       fontWeight: "600",
       letterSpacing: 0.4,
@@ -256,10 +262,16 @@ export const Typography = getTypography(DarkColors);
 
 type ShadowStyle = Pick<
   ViewStyle,
-  "shadowColor" | "shadowOffset" | "shadowOpacity" | "shadowRadius" | "elevation"
+  | "shadowColor"
+  | "shadowOffset"
+  | "shadowOpacity"
+  | "shadowRadius"
+  | "elevation"
 >;
 
-export function getShadows(colors: FaceColorPalette): Record<string, ShadowStyle> {
+export function getShadows(
+  colors: FaceColorPalette,
+): Record<string, ShadowStyle> {
   return {
     card: {
       shadowColor: "#000000",
@@ -343,6 +355,15 @@ export function useFaceTheme(): FaceTheme {
   };
 }
 
-const faceTheme = { DarkColors, LightColors, Spacing, Radius, Layout, getTypography, getShadows, useFaceTheme };
+const faceTheme = {
+  DarkColors,
+  LightColors,
+  Spacing,
+  Radius,
+  Layout,
+  getTypography,
+  getShadows,
+  useFaceTheme,
+};
 
 export default faceTheme;

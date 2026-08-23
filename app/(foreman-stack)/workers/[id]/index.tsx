@@ -1,265 +1,179 @@
-// app/(foreman-stack)/workers/[id]/index.tsx
-import { AuthStyleBackground } from "../../../../components/AuthStyleBackground";
-import { GlassCard } from "../../../../components/GlassCard";
-import { useFocusEffect } from "@react-navigation/native";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import * as ImagePicker from "expo-image-picker";
-import React, { useCallback, useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+  FaceScreenBackground,
+  Header,
+  HeroCard,
+  IdentityStatusCard,
+  PrimaryActions,
+} from "@/components/team";
+import { useFaceTheme } from "@/components/team/faceTheme";
+import ReferencePhotosCard, {
+  ReferenceAngleKey,
+  ReferenceAngleState,
+} from "@/components/team/ReferencePhotosCard";
 import {
-  fetchEmployeeFromServer,
-  getEmployee,
-  initEmployeesStore,
-  type Employee,
-} from "../../../../lib/employeesStore";
-import { apiForemanUploadEmployeePhoto } from "../../../../lib/apiClient";
-import { compressImage } from "../../../../lib/imageCompression";
-import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  ScrollView,
-  GestureHandlerRootView,
-} from "react-native-gesture-handler";
-import { Ionicons } from "@expo/vector-icons";
-import Header from "../../../../components/FaceVerification/Header";
-import HeroCard from "../../../../components/FaceVerification/HeroCard";
-import IdentityStatusCard from "../../../../components/FaceVerification/IdentityStatusCard";
-import ReferencePhotosCard from "../../../../components/FaceVerification/ReferencePhotosCard";
-import PrimaryActions from "../../../../components/FaceVerification/PrimaryActions";
-// OPTIONAL if you want server delete:
-// import { apiFetch } from "../../../../lib/api";
+  apiForemanEmployee,
+  apiListFaceEnrollments,
+  EmployeeDto,
+} from "@/lib/apiClient";
 
-async function takePhoto() {
-  const perm = await ImagePicker.requestCameraPermissionsAsync();
-  if (!perm.granted) throw new Error("Camera permission denied.");
+const ANGLE_LABELS: Record<ReferenceAngleKey, string> = {
+  front: "Front",
+  left: "Left",
+  right: "Right",
+  smile: "Smile",
+  neutral: "Neutral",
+};
 
-  const res = await ImagePicker.launchCameraAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    quality: 0.85,
-    allowsEditing: true,
-    aspect: [1, 1],
-  });
+const ANGLE_ORDER: ReferenceAngleKey[] = [
+  "front",
+  "left",
+  "right",
+  "smile",
+  "neutral",
+];
 
-  if (res.canceled) return null;
+export default function SingleTeamScreen() {
+  // `useLocalSearchParams` can hand back a fresh array/object reference for
+  // `id` on successive recomputations even when the value hasn't changed —
+  // coercing to a plain string here keeps it a stable primitive so effects
+  // that depend on it don't re-fire on every render (see timesheets/[id].tsx).
+  const params = useLocalSearchParams<{ id: string }>();
+  const id = String(params.id ?? "");
+  const { colors, typography, spacing } = useFaceTheme();
 
-  const a = res.assets?.[0];
-  if (!a?.uri) return null;
+  const [employee, setEmployee] = useState<EmployeeDto | null>(null);
+  const [angles, setAngles] = useState<ReferenceAngleState[]>(
+    ANGLE_ORDER.map((key) => ({
+      key,
+      label: ANGLE_LABELS[key],
+      complete: false,
+    })),
+  );
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const uri = a.uri;
-  const ext = uri.split(".").pop()?.toLowerCase();
-  const type =
-    ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-
-  return {
-    uri,
-    name: `employee_${Date.now()}.${ext || "jpg"}`,
-    type,
-  };
-}
-
-export default function EmployeeDetails() {
-  const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const [emp, setEmp] = useState<Employee | null>(null);
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
-
-  const refresh = useCallback(async () => {
-    const employeeId = String(id);
-
+  const load = useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    setError(null);
     try {
-      await initEmployeesStore();
+      const [employeeRes, enrollmentsRes] = await Promise.all([
+        apiForemanEmployee(id),
+        apiListFaceEnrollments(id).catch(() => ({ enrollments: [] })),
+      ]);
 
-      // 1) show cached immediately if present
-      const cached = await getEmployee(employeeId);
-      if (cached) setEmp(cached);
+      setEmployee(employeeRes.employee);
 
-      // 2) then fetch from server (this is the endpoint you require)
-      const fresh = await fetchEmployeeFromServer(employeeId);
-      if (fresh) setEmp(fresh);
-      else if (!cached) setEmp(null);
-    } catch (error) {
-      console.error("Failed to refresh employee:", error);
+      const approvedPoses = new Set(
+        enrollmentsRes.enrollments
+          .filter((e) => e.status === "APPROVED")
+          .map((e) => e.pose.toLowerCase()),
+      );
+      setAngles(
+        ANGLE_ORDER.map((key) => ({
+          key,
+          label: ANGLE_LABELS[key],
+          complete: approvedPoses.has(key),
+        })),
+      );
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to load worker.");
+    } finally {
+      setLoading(false);
     }
   }, [id]);
 
-  useFocusEffect(
-    useCallback(() => {
-      refresh();
-    }, [refresh]),
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const faceProfileComplete = useMemo(
+    () => angles.length > 0 && angles.every((a) => a.complete),
+    [angles],
   );
 
-  const handleAddOrUpdatePhoto = useCallback(async () => {
-    try {
-      const file = await takePhoto();
-      if (!file) return;
-
-      setUploadingPhoto(true);
-      const compressed = await compressImage(file.uri, {
-        maxWidth: 800,
-        maxHeight: 800,
-        quality: 0.8,
-      });
-      const compressedPhoto = {
-        uri: compressed.uri,
-        name: file.name.replace(/\.\w+$/, ".jpg"),
-        type: "image/jpeg",
-      };
-
-      await apiForemanUploadEmployeePhoto(String(id), compressedPhoto);
-      await refresh();
-    } catch (e: any) {
-      Alert.alert("Photo", e?.message ?? "Failed to update photo.");
-    } finally {
-      setUploadingPhoto(false);
-    }
-  }, [id, refresh]);
-
-  if (!emp) {
+  if (loading) {
     return (
-      <AuthStyleBackground>
-        <SafeAreaView style={styles.container}>
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIcon}>
-              <Ionicons
-                name="person-circle-outline"
-                size={90}
-                color="#4DA3FF"
-              />
-            </View>
+      <FaceScreenBackground>
+        <View
+          style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+        >
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      </FaceScreenBackground>
+    );
+  }
 
-            <Text style={styles.emptyTitle}>Person Not Found</Text>
-
-            <Text style={styles.emptySubtitle}>
-              We couldn't load this person's verification profile. Please return
-              and try again.
-            </Text>
-
-            <Pressable
-              style={styles.primaryButton}
-              onPress={() => router.back()}
-            >
-              <Ionicons name="arrow-back" size={18} color="#fff" />
-
-              <Text style={styles.primaryButtonText}>Go Back</Text>
-            </Pressable>
-          </View>
-        </SafeAreaView>
-      </AuthStyleBackground>
+  if (error || !employee) {
+    return (
+      <FaceScreenBackground>
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            padding: spacing.lg,
+          }}
+        >
+          <Text style={[typography.body, { textAlign: "center" }]}>
+            {error ?? "Worker not found."}
+          </Text>
+        </View>
+      </FaceScreenBackground>
     );
   }
 
   return (
-    <AuthStyleBackground>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <SafeAreaView style={styles.container}>
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.content}
-          >
-            <Header />
+    <FaceScreenBackground>
+      <ScrollView
+        contentContainerStyle={{
+          paddingHorizontal: spacing.lg,
+          paddingBottom: spacing.xl,
+          gap: spacing.md,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        <HeroCard
+          name={employee.fullName}
+          workerCode={employee.code}
+          photoUri={employee.faceImageUrl}
+          isActive={employee.active}
+          isFaceReady={faceProfileComplete}
+          identityStatusLabel={
+            faceProfileComplete ? "Identity Ready" : "Setup Required"
+          }
+          identityReady={faceProfileComplete}
+        />
 
-            <HeroCard
-              name={emp.fullName}
-              workerCode={emp.code}
-              photoUri={emp.faceImageUrl}
-              isActive={emp.active}
-              isFaceReady={!!emp.faceImageUrl}
-            />
+        <IdentityStatusCard
+          faceProfileComplete={faceProfileComplete}
+          verificationStatus={faceProfileComplete ? "verified" : "pending"}
+          workerStatus={employee.active ? "active" : "inactive"}
+        />
 
-            <IdentityStatusCard
-              faceProfileComplete={!!emp.faceImageUrl}
-              workerStatus={emp.active ? "active" : "inactive"}
-            />
+        <ReferencePhotosCard
+          angles={angles}
+          onCapturePress={() =>
+            router.push({
+              pathname: "/(foreman-stack)/workers/[id]/capture-reference",
+              params: { id: employee.id },
+            })
+          }
+        />
 
-            <ReferencePhotosCard onCapturePress={handleAddOrUpdatePhoto} />
-
-            <PrimaryActions
-              onVerifyPress={() =>
-                router.push({
-                  pathname: "/(foreman-stack)/workers/[id]/scan-out-face",
-                  params: { id: String(id) },
-                })
-              }
-              onCaptureReferencePress={() =>
-                router.push({
-                  pathname: "/(foreman-stack)/workers/[id]/enroll-face",
-                  params: { id: String(id) },
-                })
-              }
-            />
-          </ScrollView>
-        </SafeAreaView>
-      </GestureHandlerRootView>
-    </AuthStyleBackground>
+        <PrimaryActions
+          onVerifyPress={() =>
+            router.push({
+              pathname: "/(foreman-stack)/workers/[id]/verify",
+              params: { id: employee.id },
+            })
+          }
+        />
+      </ScrollView>
+    </FaceScreenBackground>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 40,
-  },
-
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 30,
-  },
-
-  emptyIcon: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(77,163,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(77,163,255,0.25)",
-    marginBottom: 30,
-  },
-
-  emptyTitle: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#FFFFFF",
-  },
-
-  emptySubtitle: {
-    marginTop: 12,
-    textAlign: "center",
-    color: "#93A4B8",
-    lineHeight: 24,
-    fontSize: 16,
-  },
-
-  primaryButton: {
-    marginTop: 40,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    height: 56,
-    paddingHorizontal: 28,
-    borderRadius: 18,
-    backgroundColor: "#2563EB",
-  },
-
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-});

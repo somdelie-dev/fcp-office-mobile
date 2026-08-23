@@ -12,36 +12,38 @@ import {
   View,
 } from "react-native";
 
+import { ForemanContextBanner } from "@/components/assistant/ForemanContextBanner";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/themeContext";
 
+// Same dark background + green accent as the Face Scan screen.
 const themes = {
   dark: {
-    bg: "#0b1220",
-    cardBg: "rgba(30, 41, 59, 0.8)",
-    textPrimary: "#ffffff",
-    textSecondary: "#94a3b8",
-    accent: "#38bdf8",
-    border: "#1f2a44",
+    bg: "#07111D",
+    cardBg: "rgba(11, 24, 38, 0.85)",
+    textPrimary: "#F8FAFC",
+    textSecondary: "rgba(248, 250, 252, 0.64)",
+    accent: "#22c55e",
+    border: "rgba(34, 197, 94, 0.2)",
     danger: "#ef4444",
     dangerLight: "rgba(239, 68, 68, 0.1)",
-    gradientStart: "#0a1628",
-    gradientMid: "#1a2f4f",
-    gradientEnd: "#0a1628",
+    gradientStart: "#0A1A12",
+    gradientMid: "#123420",
+    gradientEnd: "#0A1A12",
   },
   light: {
     bg: "#f8fafc",
     cardBg: "rgba(255, 255, 255, 0.9)",
     textPrimary: "#0f172a",
     textSecondary: "#64748b",
-    accent: "#262D68",
+    accent: "#16A34A",
     border: "#e2e8f0",
     danger: "#ef4444",
     dangerLight: "rgba(239, 68, 68, 0.08)",
-    gradientStart: "#262D68",
-    gradientMid: "#3B4BA4",
-    gradientEnd: "#262D68",
+    gradientStart: "#16A34A",
+    gradientMid: "#22c55e",
+    gradientEnd: "#16A34A",
   },
 };
 
@@ -139,6 +141,17 @@ export default function AssistantProfile() {
             </View>
           )}
         </Animated.View>
+
+        {user?.actingForeman && (
+          <Animated.View
+            style={[
+              styles.workingForWrap,
+              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            ]}
+          >
+            <ForemanContextBanner foreman={user.actingForeman} />
+          </Animated.View>
+        )}
 
         {/* Settings Card */}
         <Animated.View
@@ -238,6 +251,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 24,
     marginBottom: 24,
+  },
+  workingForWrap: {
+    marginHorizontal: 16,
+    marginBottom: 16,
   },
   avatarContainer: {
     position: "relative",

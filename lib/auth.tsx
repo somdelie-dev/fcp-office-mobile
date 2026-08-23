@@ -19,6 +19,7 @@ export type Role = "ADMIN" | "SUPERVISOR" | "FOREMAN" | "ASSISTANT";
 export type ForemanOption = {
   foremanId: string;
   name: string;
+  photoUrl?: string | null;
 };
 
 export type AppUser = {

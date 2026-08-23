@@ -58,37 +58,37 @@ export default function HeroCard({
   identityReady = true,
 }: HeroCardProps) {
   const { colors, typography, radius, spacing } = useFaceTheme();
-  const footerLabel = identityStatusLabel ?? (identityReady ? "Identity Ready" : "Setup Required");
+  const footerLabel =
+    identityStatusLabel ??
+    (identityReady ? "Identity Ready" : "Setup Required");
   const footerColor = identityReady ? colors.success : colors.warning;
 
   return (
-    <GlassPanel elevated radius={radius.xl} contentPadding={0} style={styles.wrapper}>
+    <GlassPanel elevated radius={5} contentPadding={0} style={styles.wrapper}>
       <LinearGradient
         colors={colors.gradientHero}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={styles.gradient}
       >
-        <View style={[styles.body, { paddingTop: spacing.xl, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }]}>
-          <View
-            style={[
-              styles.badge,
-              {
-                borderRadius: radius.pill,
-                borderColor: colors.glassBorder,
-                backgroundColor: colors.glassFill,
-                marginBottom: spacing.lg,
-              },
-            ]}
-          >
-            <Text style={[typography.label, { color: colors.secondary }]}>Face Verification</Text>
-          </View>
-
+        <View
+          style={[
+            styles.body,
+            {
+              paddingTop: spacing.xl,
+              paddingHorizontal: spacing.lg,
+              paddingBottom: spacing.lg,
+            },
+          ]}
+        >
           <View style={{ marginBottom: spacing.lg }}>
             <FacePreview photoUri={photoUri} />
           </View>
 
-          <Text style={[typography.display, { textAlign: "center" }]} numberOfLines={1}>
+          <Text
+            style={[typography.display, { textAlign: "center" }]}
+            numberOfLines={1}
+          >
             {name}
           </Text>
 
@@ -105,10 +105,19 @@ export default function HeroCard({
               },
             ]}
           >
-            <Text style={[typography.mono, { color: colors.textPrimary, letterSpacing: 1.2 }]}>{workerCode}</Text>
+            <Text
+              style={[
+                typography.mono,
+                { color: colors.textPrimary, letterSpacing: 1.2 },
+              ]}
+            >
+              {workerCode}
+            </Text>
           </View>
 
-          <View style={[styles.chipRow, { gap: spacing.xs, marginTop: spacing.lg }]}>
+          <View
+            style={[styles.chipRow, { gap: spacing.xs, marginTop: spacing.lg }]}
+          >
             {isActive && <StatusChip label="Active" tone="success" />}
             {isFaceReady && <StatusChip label="Face Ready" tone="info" />}
           </View>
@@ -126,7 +135,9 @@ export default function HeroCard({
           ]}
         >
           <ShieldCheckIcon color={footerColor} />
-          <Text style={[typography.bodyStrong, { color: footerColor }]}>{footerLabel}</Text>
+          <Text style={[typography.bodyStrong, { color: footerColor }]}>
+            {footerLabel}
+          </Text>
         </View>
       </LinearGradient>
     </GlassPanel>

@@ -7,3 +7,6 @@ export { default as IdentityStatusCard } from "./IdentityStatusCard";
 export { default as ReferencePhotosCard } from "./ReferencePhotosCard";
 export { default as PrimaryActions } from "./PrimaryActions";
 export { default as FacePreview } from "./FacePreview";
+export { default as Avatar } from "./Avatar";
+export { default as CornerBrackets } from "./CornerBrackets";
+export { default as ScanLineOverlay } from "./ScanLineOverlay";

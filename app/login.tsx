@@ -15,10 +15,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../lib/auth";
+import { useAppTheme } from "../lib/appTheme";
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
   const router = useRouter();
+  const { isDark, colors } = useAppTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -46,54 +48,115 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+    <SafeAreaView
+      style={[styles.safe, { backgroundColor: colors.background }]}
+      edges={["top", "bottom"]}
+    >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <KeyboardAvoidingView
-          style={styles.container}
+          style={[styles.container, { backgroundColor: colors.background }]}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          <View style={[styles.circle, styles.circleTop]} />
-          <View style={[styles.circleSmall, styles.circleTopInner]} />
-          <View style={[styles.circle, styles.circleBottom]} />
-          <View style={[styles.circleSmall, styles.circleBottomInner]} />
+          <View
+            style={[
+              styles.circle,
+              styles.circleTop,
+              { backgroundColor: colors.primaryGreenDim },
+            ]}
+          />
+          <View
+            style={[
+              styles.circleSmall,
+              styles.circleTopInner,
+              {
+                backgroundColor: isDark
+                  ? "rgba(34, 197, 94, 0.08)"
+                  : colors.surfaceElevated,
+              },
+            ]}
+          />
+          <View
+            style={[
+              styles.circle,
+              styles.circleBottom,
+              { backgroundColor: colors.primaryGreenDim },
+            ]}
+          />
+          <View
+            style={[
+              styles.circleSmall,
+              styles.circleBottomInner,
+              {
+                backgroundColor: isDark
+                  ? "rgba(34, 197, 94, 0.08)"
+                  : colors.surfaceElevated,
+              },
+            ]}
+          />
 
-          <View style={styles.card}>
-            <Text style={styles.title}>SIGN IN</Text>
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.title, { color: colors.textPrimary }]}>
+              SIGN IN
+            </Text>
 
-            <View style={styles.inputWrap}>
+            <View
+              style={[
+                styles.inputWrap,
+                {
+                  backgroundColor: colors.surfaceElevated,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
               <Ionicons
                 name="mail"
                 size={18}
-                color="#2B2F3A"
+                color={colors.textSecondary}
                 style={styles.icon}
               />
               <TextInput
                 value={email}
                 onChangeText={setEmail}
                 placeholder="Email"
-                placeholderTextColor="#A2A7B3"
+                placeholderTextColor={colors.textTertiary}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
-                style={styles.input}
+                style={[styles.input, { color: colors.textPrimary }]}
                 returnKeyType="next"
               />
             </View>
 
-            <View style={styles.inputWrap}>
+            <View
+              style={[
+                styles.inputWrap,
+                {
+                  backgroundColor: colors.surfaceElevated,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
               <Ionicons
                 name="lock-closed"
                 size={18}
-                color="#2B2F3A"
+                color={colors.textSecondary}
                 style={styles.icon}
               />
               <TextInput
                 value={password}
                 onChangeText={setPassword}
                 placeholder="Password"
-                placeholderTextColor="#A2A7B3"
+                placeholderTextColor={colors.textTertiary}
                 secureTextEntry={!showPassword}
-                style={styles.input}
+                style={[styles.input, { color: colors.textPrimary }]}
                 returnKeyType="done"
                 onSubmitEditing={onSubmit}
               />
@@ -105,22 +168,27 @@ export default function LoginScreen() {
                 <Ionicons
                   name={showPassword ? "eye-off" : "eye"}
                   size={18}
-                  color="#A2A7B3"
+                  color={colors.textTertiary}
                 />
               </Pressable>
             </View>
 
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? (
+              <Text style={[styles.error, { color: colors.danger }]}>
+                {error}
+              </Text>
+            ) : null}
 
             <Pressable
               onPress={onSubmit}
               disabled={busy}
               style={({ pressed }) => [
                 styles.button,
-                (pressed || busy) && { opacity: 0.9 },
+                { backgroundColor: colors.primaryGreen },
+                (pressed || busy) && { opacity: 0.85 },
               ]}
             >
-              <Text style={styles.buttonText}>
+              <Text style={[styles.buttonText, { color: colors.textOnPrimary }]}>
                 {busy ? "SIGNING IN..." : "SIGN IN"}
               </Text>
             </Pressable>
@@ -129,7 +197,9 @@ export default function LoginScreen() {
               onPress={() => {}}
               style={{ paddingVertical: 10, alignItems: "center" }}
             >
-              <Text style={styles.forgot}>Forgot Password?</Text>
+              <Text style={[styles.forgot, { color: colors.textSecondary }]}>
+                Forgot Password?
+              </Text>
             </Pressable>
           </View>
         </KeyboardAvoidingView>
@@ -138,15 +208,10 @@ export default function LoginScreen() {
   );
 }
 
-const NAVY = "#262D68";
-const BG = "#EEF0F5";
-const CARD = "#F7F7F8";
-
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
+  safe: { flex: 1 },
   container: {
     flex: 1,
-    backgroundColor: BG,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 18,
@@ -156,7 +221,6 @@ const styles = StyleSheet.create({
     width: 360,
     height: 360,
     borderRadius: 360,
-    backgroundColor: NAVY,
     opacity: 0.95,
   },
   circleSmall: {
@@ -164,7 +228,6 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: 220,
-    backgroundColor: "#DADDE8",
   },
   circleTop: { top: -220, right: -220 },
   circleTopInner: { top: -155, right: -155 },
@@ -174,14 +237,12 @@ const styles = StyleSheet.create({
   card: {
     width: "100%",
     maxWidth: 380,
-    backgroundColor: CARD,
     borderRadius: 14,
     paddingHorizontal: 18,
     paddingVertical: 18,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.05)",
     shadowColor: "#000",
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.25,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
     elevation: 10,
@@ -190,36 +251,31 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "900",
     letterSpacing: 1,
-    color: "#121318",
     marginBottom: 14,
   },
   inputWrap: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E6E7EC",
     paddingHorizontal: 12,
     height: 46,
     marginBottom: 12,
   },
   icon: { marginRight: 10 },
-  input: { flex: 1, color: "#111", fontWeight: "600" },
-  error: { color: "#B00020", fontWeight: "700", marginBottom: 10 },
+  input: { flex: 1, fontWeight: "600" },
+  error: { fontWeight: "700", marginBottom: 10 },
   button: {
     height: 46,
     borderRadius: 10,
-    backgroundColor: NAVY,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 4,
   },
   buttonText: {
-    color: "#fff",
     fontWeight: "900",
     letterSpacing: 1,
     fontSize: 13,
   },
-  forgot: { color: "#6A6F7A", fontWeight: "700", fontSize: 12 },
+  forgot: { fontWeight: "700", fontSize: 12 },
 });

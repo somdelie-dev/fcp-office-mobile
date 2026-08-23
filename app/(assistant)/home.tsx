@@ -22,6 +22,7 @@ import {
     View,
 } from "react-native";
 
+import { ForemanContextBanner } from "@/components/assistant/ForemanContextBanner";
 import {
     recordPendingScan,
     recordSubmittedBatch,
@@ -167,7 +168,7 @@ export default function AssistantScan() {
     try {
       const dres = await apiAttendanceTodayCached(site.id);
       setDay(dres.day);
-      setStatus("Scan employee cards (batch mode)…");
+      setStatus("Scan personel cards (batch mode)…");
     } catch (e: any) {
       setStatus(e?.message ?? "Failed to load today.");
       setDay(null);
@@ -213,7 +214,7 @@ export default function AssistantScan() {
 
     const code = extractEmployeeCode(payload);
     if (!code) {
-      setStatus("⚠️ Not an employee card QR");
+      setStatus("⚠️ Not a personel card QR");
       return;
     }
 
@@ -384,7 +385,7 @@ export default function AssistantScan() {
               Camera permission needed
             </Text>
             <Text style={[styles.sub, { color: isDark ? "#94a3b8" : "#666" }]}>
-              We use the camera to scan employee QR cards.
+              We use the camera to scan personel QR cards.
             </Text>
             <Pressable style={styles.btnPrimary} onPress={requestPermission}>
               <Text style={styles.btnPrimaryText}>Allow camera</Text>
@@ -460,7 +461,7 @@ export default function AssistantScan() {
                   <Text
                     style={[
                       styles.foremanOptionArrow,
-                      { color: isDark ? "#38bdf8" : NAVY },
+                      { color: isDark ? "#22c55e" : NAVY },
                     ]}
                   >
                     →
@@ -549,7 +550,7 @@ export default function AssistantScan() {
                     ? "Please wait for the current submit to finish."
                     : day?.status && day.status !== "PENDING"
                       ? "Once submitted or approved, scanning is disabled for this day."
-                      : "Choose a site above, then point the camera at an employee QR card."}
+                      : "Choose a site above, then point the camera at a personel QR card."}
                 </Text>
               </View>
             )}
@@ -596,56 +597,11 @@ export default function AssistantScan() {
           </Text>
 
           {actingForeman ? (
-            <View style={styles.actingForemanContainer}>
-              <View
-                style={[
-                  styles.actingForemanPill,
-                  {
-                    backgroundColor: isDark
-                      ? "rgba(56,189,248,0.15)"
-                      : "rgba(38,45,104,0.12)",
-                    borderColor: isDark
-                      ? "rgba(56,189,248,0.25)"
-                      : "rgba(38,45,104,0.18)",
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.actingForemanText,
-                    { color: isDark ? "#38bdf8" : NAVY },
-                  ]}
-                >
-                  Acting for:{" "}
-                  <Text style={{ fontWeight: "900" }}>
-                    {actingForeman.name}
-                  </Text>
-                </Text>
-              </View>
-
-              <Pressable
-                style={[
-                  styles.changeForemanBtn,
-                  {
-                    backgroundColor: isDark
-                      ? "rgba(255,255,255,0.1)"
-                      : "rgba(255,255,255,0.7)",
-                    borderColor: isDark
-                      ? "rgba(255,255,255,0.15)"
-                      : "rgba(0,0,0,0.08)",
-                  },
-                ]}
-                onPress={handleChangeForeman}
-              >
-                <Text
-                  style={[
-                    styles.changeForemanBtnTxt,
-                    { color: isDark ? "#fff" : "#111" },
-                  ]}
-                >
-                  Change
-                </Text>
-              </Pressable>
+            <View style={{ marginTop: 4 }}>
+              <ForemanContextBanner
+                foreman={actingForeman}
+                onChange={handleChangeForeman}
+              />
             </View>
           ) : null}
 
@@ -843,11 +799,11 @@ export default function AssistantScan() {
                     styles.badgeBatch,
                     {
                       backgroundColor: isDark
-                        ? "rgba(56,189,248,0.15)"
-                        : "rgba(38,45,104,0.12)",
+                        ? "rgba(34,197,94,0.15)"
+                        : "rgba(34,197,94,0.12)",
                       borderColor: isDark
-                        ? "rgba(56,189,248,0.25)"
-                        : "rgba(38,45,104,0.18)",
+                        ? "rgba(34,197,94,0.25)"
+                        : "rgba(34,197,94,0.18)",
                     },
                   ]}
                 >
@@ -855,7 +811,7 @@ export default function AssistantScan() {
                     style={[
                       styles.badgeTxt,
                       styles.badgeBatchTxt,
-                      { color: isDark ? "#38bdf8" : NAVY },
+                      { color: isDark ? "#22c55e" : NAVY },
                     ]}
                   >
                     BATCH
@@ -871,7 +827,7 @@ export default function AssistantScan() {
                     fontWeight: "800",
                   }}
                 >
-                  No items in batch yet. Scan employee cards to add them.
+                  No items in batch yet. Scan personel cards to add them.
                 </Text>
               </View>
             }
@@ -1026,8 +982,8 @@ export default function AssistantScan() {
                       },
                       site?.id === item.id && {
                         backgroundColor: isDark
-                          ? "rgba(56,189,248,0.15)"
-                          : "rgba(38,45,104,0.08)",
+                          ? "rgba(34,197,94,0.15)"
+                          : "rgba(34,197,94,0.08)",
                       },
                     ]}
                     onPress={async () => {
@@ -1042,7 +998,7 @@ export default function AssistantScan() {
                         styles.siteOptionText,
                         { color: isDark ? "#fff" : "#111" },
                         site?.id === item.id && {
-                          color: isDark ? "#38bdf8" : NAVY,
+                          color: isDark ? "#22c55e" : NAVY,
                         },
                       ]}
                     >
@@ -1052,7 +1008,7 @@ export default function AssistantScan() {
                       <Text
                         style={[
                           styles.siteCheckmark,
-                          { color: isDark ? "#38bdf8" : NAVY },
+                          { color: isDark ? "#22c55e" : NAVY },
                         ]}
                       >
                         ✓
@@ -1065,7 +1021,7 @@ export default function AssistantScan() {
               <Pressable
                 style={[
                   styles.modalCloseButton,
-                  { backgroundColor: isDark ? "#38bdf8" : NAVY },
+                  { backgroundColor: isDark ? "#22c55e" : NAVY },
                 ]}
                 onPress={() => setSiteModalOpen(false)}
               >
@@ -1079,7 +1035,7 @@ export default function AssistantScan() {
   );
 }
 
-const NAVY = "#262D68";
+const NAVY = "#16A34A";
 
 const styles = StyleSheet.create({
   scrollContainer: {
@@ -1241,8 +1197,8 @@ const styles = StyleSheet.create({
   badgeTxt: { fontWeight: "900", color: "#1a7f37" },
 
   badgeBatch: {
-    backgroundColor: "rgba(38,45,104,0.12)",
-    borderColor: "rgba(38,45,104,0.18)",
+    backgroundColor: "rgba(34,197,94,0.12)",
+    borderColor: "rgba(34,197,94,0.18)",
   },
   badgeBatchTxt: { color: NAVY },
 
@@ -1325,9 +1281,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: "rgba(38,45,104,0.12)",
+    backgroundColor: "rgba(34,197,94,0.12)",
     borderWidth: 1,
-    borderColor: "rgba(38,45,104,0.18)",
+    borderColor: "rgba(34,197,94,0.18)",
   },
   actingForemanText: { fontSize: 12, fontWeight: "600", color: NAVY },
   changeForemanBtn: {

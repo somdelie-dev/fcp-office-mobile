@@ -472,11 +472,11 @@ function badgeStyle(status: ForemanDayDetailDto["status"]) {
   if (status === "REJECTED")
     return { backgroundColor: "rgba(220, 0, 0, 0.10)" };
   if (status === "SUBMITTED")
-    return { backgroundColor: "rgba(38,45,104,0.14)" };
+    return { backgroundColor: "rgba(34,197,94,0.14)" };
   return { backgroundColor: "rgba(255, 170, 0, 0.14)" };
 }
 
-const NAVY = "#262D68";
+const NAVY = "#16A34A";
 
 const styles = StyleSheet.create({
   container: { padding: 16, gap: 12 },
@@ -512,7 +512,7 @@ const styles = StyleSheet.create({
   },
   badgeTxt: { fontWeight: "900", color: "#111", fontSize: 12 },
 
-  readyOn: { backgroundColor: "rgba(38,45,104,0.14)" },
+  readyOn: { backgroundColor: "rgba(34,197,94,0.14)" },
   readyOff: { backgroundColor: "rgba(0,0,0,0.05)" },
 
   siteName: { marginTop: 10, fontSize: 18, fontWeight: "900", color: "#111" },

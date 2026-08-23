@@ -294,7 +294,7 @@ export default function PhotoVerificationsScreen() {
     STATUS_COLORS.PENDING;
 
   const TABS: { key: FilterTab; label: string; color: string }[] = [
-    { key: "ALL", label: "All", color: "#3b82f6" },
+    { key: "ALL", label: "All", color: "#22c55e" },
     { key: "PENDING", label: "Pending", color: "#f59e0b" },
     { key: "VERIFIED", label: "Verified", color: "#10b981" },
     { key: "REJECTED", label: "Rejected", color: "#ef4444" },
@@ -546,7 +546,7 @@ export default function PhotoVerificationsScreen() {
                   )}
                   {selectedPhoto.latitude && selectedPhoto.longitude && (
                     <Pressable onPress={openMap} style={styles.mapLinkRow}>
-                      <Ionicons name="map" size={14} color="#3b82f6" />
+                      <Ionicons name="map" size={14} color="#22c55e" />
                       <Text style={styles.mapLinkText}>View on map</Text>
                     </Pressable>
                   )}
@@ -717,7 +717,7 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 16, textAlign: "center", marginTop: 12 },
   retryBtn: {
     marginTop: 16,
-    backgroundColor: "#3b82f6",
+    backgroundColor: "#22c55e",
     paddingHorizontal: 24,
     paddingVertical: 10,
     borderRadius: 8,
@@ -836,7 +836,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   mapLinkText: {
-    color: "#3b82f6",
+    color: "#22c55e",
     fontSize: 13,
     fontWeight: "600",
   },

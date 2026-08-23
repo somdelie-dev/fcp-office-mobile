@@ -6,20 +6,21 @@ import React from "react";
 import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../lib/themeContext";
+import AnimatedTabBar from "@/components/foreman/AnimatedTabBar";
 
 const themes = {
   dark: {
-    headerBg: "rgba(56, 189, 248, 0.15)",
-    headerBorder: "rgba(56, 189, 248, 0.3)",
-    tabBarBg: "rgba(15, 23, 42, 0.95)",
-    tabActive: "#38bdf8",
+    headerBg: "rgba(34, 197, 94, 0.15)",
+    headerBorder: "rgba(34, 197, 94, 0.3)",
+    tabBarBg: "rgba(11, 24, 38, 0.95)",
+    tabActive: "#22c55e",
     tabInactive: "#64748b",
   },
   light: {
-    headerBg: "rgba(99, 144, 251, 0.48)",
-    headerBorder: "rgba(99, 144, 251, 0.48)",
+    headerBg: "rgba(34, 197, 94, 0.14)",
+    headerBorder: "rgba(34, 197, 94, 0.35)",
     tabBarBg: "rgba(255, 255, 255, 0.95)",
-    tabActive: "#262D68",
+    tabActive: "#16A34A",
     tabInactive: "#8a8a8a",
   },
 };
@@ -40,6 +41,7 @@ export default function AdminTabs() {
   return (
     <GradientBackground>
       <Tabs
+        tabBar={(props) => <AnimatedTabBar {...props} />}
         screenOptions={{
           headerTitle: () => <LogoHeader />,
           headerShadowVisible: true,
