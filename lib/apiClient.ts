@@ -2,7 +2,7 @@
 import { apiFetch } from "./api";
 import { apiFetchCached, buildCacheKey, OfflineError } from "./apiFetchCached";
 import type { Role } from "./auth";
-import { cacheKeyScope, cacheSet, TTL } from "./mobileCache";
+import { cacheKeyScope, cacheRemove, cacheSet, TTL } from "./mobileCache";
 
 // Re-export for convenience
 export { OfflineError };
@@ -200,16 +200,34 @@ export async function apiAdminListUsers(
   return apiFetch(`/api/app/admin/users?role=${encodeURIComponent(role)}`);
 }
 
-/** List all users (optionally filter by role and search) */
-export async function apiAdminAllUsers(query?: {
-  role?: string;
-  q?: string;
-}): Promise<{ ok: true; users: AdminUserListItemDto[] }> {
+/**
+ * List all users (optionally filter by role and search)
+ *
+ * Cache-first, reference data (personnel roster). Not invalidated on mutation:
+ * role/search filters produce many distinct cache keys, so a targeted
+ * cacheRemove would only ever clear one variant. Falls back to TTL expiry
+ * (TTL.EMPLOYEES_LIST) — see caching audit Priority 1 notes.
+ */
+export async function apiAdminAllUsers(
+  query?: {
+    role?: string;
+    q?: string;
+  },
+  forceRefresh = false,
+): Promise<{ ok: true; users: AdminUserListItemDto[] }> {
   const params = new URLSearchParams();
   if (query?.role) params.set("role", query.role);
   if (query?.q) params.set("q", query.q);
   const qs = params.toString();
-  return apiFetch(`/api/app/admin/users${qs ? `?${qs}` : ""}`);
+  const path = `/api/app/admin/users${qs ? `?${qs}` : ""}`;
+
+  const baseKey = buildCacheKey("admin_all_users", query?.role, query?.q);
+  const key = await cacheKeyScope(baseKey);
+  return apiFetchCached<{ ok: true; users: AdminUserListItemDto[] }>(path, {
+    cacheKey: key,
+    ttlMs: TTL.EMPLOYEES_LIST,
+    forceRefresh,
+  });
 }
 
 /** Delete a user by id */
@@ -232,10 +250,14 @@ export async function apiAdminCreateForeman(data: {
   ok: true;
   user: { id: string; email: string; name: string; role: string };
 }> {
-  return apiFetch("/api/app/admin/users", {
+  const result = await apiFetch("/api/app/admin/users", {
     method: "POST",
     body: JSON.stringify(data),
   });
+  // Invalidate the admin foremen-list cache (apiAdminForemenList) so the
+  // Foremen screen shows the new foreman on next load instead of a stale list.
+  await cacheRemove(await cacheKeyScope(buildCacheKey("admin_foremen_list")));
+  return result;
 }
 
 // ADMIN: AUDIT LOGS (activity logs)
@@ -539,13 +561,27 @@ export type AdminForemanListItemDto = {
   isAssistant: boolean;
 };
 
-export async function apiAdminForemenList(query?: {
-  q?: string;
-}): Promise<{ ok: true; foremen: AdminForemanListItemDto[] }> {
+export async function apiAdminForemenList(
+  query?: {
+    q?: string;
+  },
+  forceRefresh = false,
+): Promise<{ ok: true; foremen: AdminForemanListItemDto[] }> {
   const params = new URLSearchParams();
   if (query?.q) params.set("q", query.q);
   const qs = params.toString();
-  return apiFetch(`/api/app/admin/foremen${qs ? `?${qs}` : ""}`);
+  const path = `/api/app/admin/foremen${qs ? `?${qs}` : ""}`;
+
+  const baseKey = buildCacheKey("admin_foremen_list", query?.q);
+  const key = await cacheKeyScope(baseKey);
+  return apiFetchCached<{ ok: true; foremen: AdminForemanListItemDto[] }>(
+    path,
+    {
+      cacheKey: key,
+      ttlMs: TTL.EMPLOYEES_LIST, // reference/personnel list, reuse existing TTL
+      forceRefresh,
+    },
+  );
 }
 
 export async function apiAdminCreateAssistant(
@@ -959,8 +995,13 @@ export async function apiRegisterPushToken(input: {
   }) as Promise<{ ok: true }>;
 }
 
+/**
+ * Reference data: foreman's assigned sites. Delegates to apiSitesCached
+ * (defined below) so both names share one cache-first implementation
+ * instead of duplicating the TTL/scoping logic.
+ */
 export async function apiSites(): Promise<{ sites: Site[] }> {
-  return apiFetch("/api/app/sites");
+  return apiSitesCached();
 }
 
 export async function apiAttendanceToday(
@@ -1525,12 +1566,16 @@ export type EmployeeDto = {
 };
 
 export async function apiForemanCreateEmployee(input: CreateEmployeeInput) {
-  return apiFetch("/api/app/foreman/employees", {
+  const result = (await apiFetch("/api/app/foreman/employees", {
     method: "POST",
     body: JSON.stringify(input),
     headers: { "content-type": "application/json" },
     auth: true,
-  }) as Promise<{ employee: { id: string } & Partial<EmployeeDto> }>;
+  })) as { employee: { id: string } & Partial<EmployeeDto> };
+  // Invalidate apiForemanEmployees' cache so the worker list shows the new
+  // employee on next load instead of a stale list.
+  await cacheRemove(await cacheKeyScope("foreman_employees_list"));
+  return result;
 }
 
 /** ✅ Update an existing employee */
@@ -1538,7 +1583,7 @@ export async function apiForemanUpdateEmployee(
   employeeId: string,
   input: CreateEmployeeInput,
 ) {
-  return apiFetch(
+  const result = (await apiFetch(
     `/api/app/foreman/employees/${encodeURIComponent(employeeId)}`,
     {
       method: "POST",
@@ -1546,7 +1591,9 @@ export async function apiForemanUpdateEmployee(
       headers: { "content-type": "application/json" },
       auth: true,
     },
-  ) as Promise<{ employee: { id: string } & Partial<EmployeeDto> }>;
+  )) as { employee: { id: string } & Partial<EmployeeDto> };
+  await cacheRemove(await cacheKeyScope("foreman_employees_list"));
+  return result;
 }
 
 export async function apiForemanUploadEmployeePhoto(
@@ -1560,13 +1607,16 @@ export async function apiForemanUploadEmployeePhoto(
     type: file.type,
   } as any);
 
-  return apiFetch(
+  const result = await apiFetch(
     `/api/app/foreman/employees/${encodeURIComponent(employeeId)}/photo`,
     { method: "POST", body: fd as any, auth: true },
   );
+  // faceImageUrl shown in the worker list changes after a photo upload.
+  await cacheRemove(await cacheKeyScope("foreman_employees_list"));
+  return result;
 }
 
-export async function apiForemanEmployees(): Promise<{
+export async function apiForemanEmployees(forceRefresh = false): Promise<{
   employees: Array<{
     id: string;
     code: string;
@@ -1576,7 +1626,12 @@ export async function apiForemanEmployees(): Promise<{
     faceImageUrl?: string | null;
   }>;
 }> {
-  return apiFetch("/api/app/foreman/employees");
+  const key = await cacheKeyScope("foreman_employees_list");
+  return apiFetchCached("/api/app/foreman/employees", {
+    cacheKey: key,
+    ttlMs: TTL.EMPLOYEES_LIST,
+    forceRefresh,
+  });
 }
 
 /** ✅ FIX: single employee response includes { ok: true, employee: ... } */
@@ -1703,11 +1758,27 @@ export type ForemanOptionDto = {
   email?: string | null;
 };
 
-export async function apiSupervisorAllForemen(): Promise<{
+/**
+ * Cache-first, reference data (foreman roster for supervisor pickers). Not
+ * invalidated on mutation here: a new foreman is created from the admin
+ * Users screen (apiAdminCreateForeman), on a different device/session than
+ * the supervisor viewing this list, so a local cacheRemove on this device
+ * can't reach that other device's cache. Falls back to TTL expiry
+ * (TTL.EMPLOYEES_LIST) — see caching audit Priority 1 notes.
+ */
+export async function apiSupervisorAllForemen(forceRefresh = false): Promise<{
   ok: true;
   foremen: ForemanOptionDto[];
 }> {
-  return apiFetch("/api/app/foreman");
+  const key = await cacheKeyScope("supervisor_all_foremen");
+  return apiFetchCached<{ ok: true; foremen: ForemanOptionDto[] }>(
+    "/api/app/foreman",
+    {
+      cacheKey: key,
+      ttlMs: TTL.EMPLOYEES_LIST,
+      forceRefresh,
+    },
+  );
 }
 
 export async function apiSupervisorSites(query?: {
@@ -2611,6 +2682,98 @@ export async function apiListFaceEnrollments(employeeId: string): Promise<{
 }> {
   return apiFetch(
     `/api/app/foreman/employees/${encodeURIComponent(employeeId)}/face-enrollments`,
+    { auth: true },
+  );
+}
+
+// ─── SUPERVISOR: EMPLOYEE FACE REFERENCES ──────────────────────────────────
+//
+// Same shapes as apiForemanEmployee / apiCreateFaceEnrollments /
+// apiListFaceEnrollments above, scoped to employees visible to the
+// supervisor (see employeeWhereFor on the backend) rather than a foreman's
+// own crew. apiSupervisorEmployee reuses the generic /api/employees/:id
+// route, which is already scoped per-role server-side.
+
+export async function apiSupervisorEmployee(employeeId: string): Promise<{
+  ok: true;
+  employee: EmployeeDto;
+}> {
+  return apiFetch(`/api/employees/${encodeURIComponent(employeeId)}`);
+}
+
+export async function apiSupervisorCreateFaceEnrollments(
+  employeeId: string,
+  photos: { uri: string; name: string; type: string; pose: FaceEnrollmentPose }[],
+  meta?: { device?: string; latitude?: number; longitude?: number },
+): Promise<{
+  results: (
+    | { id: string; pose: string; qualityScore: number | null }
+    | { pose: string; error: string; warnings?: string[] }
+  )[];
+}> {
+  const fd = new FormData();
+  for (const photo of photos) {
+    fd.append("photos", { uri: photo.uri, name: photo.name, type: photo.type } as any);
+  }
+  fd.append("poses", JSON.stringify(photos.map((p) => p.pose)));
+  if (meta?.device) fd.append("device", meta.device);
+  if (meta?.latitude !== undefined) fd.append("latitude", String(meta.latitude));
+  if (meta?.longitude !== undefined) fd.append("longitude", String(meta.longitude));
+
+  return apiFetch(
+    `/api/app/supervisor/employees/${encodeURIComponent(employeeId)}/face-enrollments`,
+    { method: "POST", body: fd as any, auth: true },
+  );
+}
+
+export async function apiSupervisorListFaceEnrollments(
+  employeeId: string,
+): Promise<{
+  enrollments: {
+    id: string;
+    pose: string;
+    imageUrl: string;
+    qualityScore: number | null;
+    status: "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+    rejectedReason: string | null;
+    createdAt: string;
+  }[];
+}> {
+  return apiFetch(
+    `/api/app/supervisor/employees/${encodeURIComponent(employeeId)}/face-enrollments`,
+    { auth: true },
+  );
+}
+
+export type FaceVerificationStatus = "MISSING" | "PENDING" | "RECOGNISED";
+
+export type FaceVerificationEmployeeDto = {
+  id: string;
+  fullName: string;
+  code: string;
+  photoUrl: string | null;
+  active: boolean;
+  faceStatus: FaceVerificationStatus;
+  completedPoses: number;
+  totalPoses: number;
+};
+
+/** Backs the supervisor's Face Verification list - one row per employee with a rolled-up MISSING/PENDING/RECOGNISED status. */
+export async function apiSupervisorFaceVerifications(
+  show: "active" | "all" = "active",
+): Promise<{ ok: true; employees: FaceVerificationEmployeeDto[] }> {
+  return apiFetch(
+    `/api/app/supervisor/employees/face-status?show=${show}`,
+    { auth: true },
+  );
+}
+
+/** Foreman equivalent of apiSupervisorFaceVerifications, scoped to the foreman's own crew. */
+export async function apiForemanFaceVerifications(
+  show: "active" | "all" = "active",
+): Promise<{ ok: true; employees: FaceVerificationEmployeeDto[] }> {
+  return apiFetch(
+    `/api/app/foreman/employees/face-status?show=${show}`,
     { auth: true },
   );
 }
