@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LogoHeader } from "../../components/LogoHeader";
 import { useTheme } from "../../lib/themeContext";
 import AnimatedTabBar from "@/components/foreman/AnimatedTabBar";
+import { fill3DTransitionSpec, forFill3D } from "@/components/foreman/tabSceneTransition";
 
 const themes = {
   dark: {
@@ -43,7 +44,9 @@ export default function AssistantTabs() {
       <Tabs
         tabBar={(props) => <AnimatedTabBar {...props} />}
         screenOptions={{
-          headerTitle: () => <LogoHeader />,
+          sceneStyleInterpolator: forFill3D,
+          transitionSpec: fill3DTransitionSpec,
+          header: () => <LogoHeader />,
           headerShadowVisible: true,
           headerStyle: {
             backgroundColor: colors.headerBg,

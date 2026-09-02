@@ -1184,17 +1184,27 @@ export type ScanOutPendingEmployee = {
   fullName: string;
   faceImageUrl: string | null;
   scannedInAtISO: string;
+  /** Which site this scan-in was at — only meaningful when siteId is omitted (see below) and the pool spans several sites. */
+  siteName?: string | null;
 };
 
-/** Employees scanned in today at this site who haven't been scanned out yet, plus a total-scanned-in count for the scanner's session counter. */
+/**
+ * Employees scanned in today who haven't been scanned out yet, plus a
+ * total-scanned-in count for the scanner's session counter.
+ *
+ * siteId is optional: a real foreman scanning out from one site passes it
+ * as before. An assistant acting on a foreman's behalf has no site to pick
+ * ahead of time, so omitting it spans every site that foreman is currently
+ * assigned to (see the matching comment on apiScanOutIdentify).
+ */
 export async function apiForemanScanOutPending(
-  siteId: string,
+  siteId: string | null,
   dateISO: string,
 ): Promise<{ employees: ScanOutPendingEmployee[]; totalScannedInToday: number }> {
-  const qSite = encodeURIComponent(siteId);
   const qDate = encodeURIComponent(dateISO);
+  const qSite = siteId ? `&siteId=${encodeURIComponent(siteId)}` : "";
   return apiFetch(
-    `/api/app/foreman/day/scan-out-pending?siteId=${qSite}&dateISO=${qDate}`,
+    `/api/app/foreman/day/scan-out-pending?dateISO=${qDate}${qSite}`,
   ) as Promise<{ employees: ScanOutPendingEmployee[]; totalScannedInToday: number }>;
 }
 
@@ -1219,6 +1229,105 @@ export async function apiForemanRecentScanOuts(): Promise<{
   }) as Promise<{ scanOuts: ForemanScanOutDto[] }>;
 }
 
+export type SupervisorScanOutDto = ForemanScanOutDto;
+
+/**
+ * Last 7 days of scan-out events across every site this supervisor is
+ * assigned to, filtered to a single scan-out method.
+ */
+export async function apiSupervisorRecentScanOuts(
+  method: "PHOTO" | "FINGERPRINT" | "FACE",
+): Promise<{ scanOuts: SupervisorScanOutDto[] }> {
+  return apiFetch(
+    `/api/app/supervisor/scan-outs/recent?method=${encodeURIComponent(method)}`,
+    { auth: true },
+  ) as Promise<{ scanOuts: SupervisorScanOutDto[] }>;
+}
+
+// ─── SUPERVISOR CONTINUOUS FACE SCAN-OUT ────────────────────────────────────
+//
+// Same "here's a face, tell me who this is" flow as the foreman scanner
+// below, but a supervisor oversees several sites/foremen at once: there is
+// no siteId to pass in, the candidate pool spans every site the supervisor
+// is assigned to, and a match reports back which site/foreman it was
+// auto-detected against.
+
+export type SupervisorScanOutPendingEmployee = {
+  id: string;
+  fullName: string;
+  faceImageUrl: string | null;
+  scannedInAtISO: string;
+};
+
+export async function apiSupervisorScanOutPending(
+  dateISO: string,
+): Promise<{ employees: SupervisorScanOutPendingEmployee[]; totalScannedInToday: number }> {
+  return apiFetch(
+    `/api/app/supervisor/scan-out-pending?dateISO=${encodeURIComponent(dateISO)}`,
+    { auth: true },
+  ) as Promise<{ employees: SupervisorScanOutPendingEmployee[]; totalScannedInToday: number }>;
+}
+
+type ScanOutSiteForemanInfo = {
+  site: { id: string; name: string };
+  foreman: { id: string; name: string } | null;
+};
+
+export type SupervisorScanOutIdentifyResult =
+  | ({
+      ok: true;
+      recorded: true;
+      employee: { id: string; fullName: string };
+      method: "FACE";
+      confidence: number;
+      verificationStatus: "VERIFIED";
+      scannedOutAt: string;
+    } & ScanOutSiteForemanInfo)
+  | ({
+      ok: true;
+      recorded: false;
+      needsConfirmation: true;
+      employee: { id: string; fullName: string };
+      method: "FACE";
+      confidence: number;
+      matchedEnrollmentId: string;
+    } & ScanOutSiteForemanInfo)
+  | {
+      ok: false;
+      error: "no_candidates" | "no_face_detected" | "multiple_faces_detected" | "low_quality" | "no_match" | "service_unavailable";
+      warnings?: string[];
+    };
+
+export async function apiSupervisorScanOutIdentify(input: {
+  dateISO: string;
+  device: string;
+  image: string;
+  checkLiveness?: boolean;
+}): Promise<SupervisorScanOutIdentifyResult> {
+  return apiFetch("/api/app/supervisor/scan-out-identify", {
+    method: "POST",
+    body: JSON.stringify(input),
+    headers: { "content-type": "application/json" },
+    auth: true,
+  }) as Promise<SupervisorScanOutIdentifyResult>;
+}
+
+export async function apiSupervisorScanOutConfirm(input: {
+  siteId: string;
+  dateISO: string;
+  employeeId: string;
+  device: string;
+  confidence: number;
+  matchedEnrollmentId?: string;
+}): Promise<ScanOutConfirmResult> {
+  return apiFetch("/api/app/supervisor/scan-out-confirm", {
+    method: "POST",
+    body: JSON.stringify(input),
+    headers: { "content-type": "application/json" },
+    auth: true,
+  }) as Promise<ScanOutConfirmResult>;
+}
+
 // ─── CONTINUOUS FACE SCAN-OUT ───────────────────────────────────────────────
 //
 // "Here's a face, tell me who this is" instead of "verify this specific
@@ -1236,6 +1345,8 @@ export type ScanOutIdentifyResult =
       confidence: number;
       verificationStatus: "VERIFIED";
       scannedOutAt: string;
+      /** Which site this scan-out was recorded against — always the site passed in, or the auto-detected one when siteId was omitted. */
+      site: { id: string; name: string };
     }
   | {
       ok: true;
@@ -1245,6 +1356,7 @@ export type ScanOutIdentifyResult =
       method: "FACE";
       confidence: number;
       matchedEnrollmentId: string;
+      site: { id: string; name: string };
     }
   | {
       ok: false;
@@ -1253,7 +1365,8 @@ export type ScanOutIdentifyResult =
     };
 
 export async function apiScanOutIdentify(input: {
-  siteId: string;
+  /** Omit when there's no site to pick ahead of time (e.g. an assistant acting on a foreman's behalf) — the candidate pool then spans every site that foreman is currently assigned to, and the match reports back which one it found. */
+  siteId?: string;
   dateISO: string;
   device: string;
   image: string;
@@ -2774,6 +2887,86 @@ export async function apiForemanFaceVerifications(
 ): Promise<{ ok: true; employees: FaceVerificationEmployeeDto[] }> {
   return apiFetch(
     `/api/app/foreman/employees/face-status?show=${show}`,
+    { auth: true },
+  );
+}
+
+// ADMIN: FACE VERIFICATIONS
+// Mirrors the web admin Face Verifications page (approve/reject reference
+// photos, browse verified employees, view scan-out verification history).
+
+export type FaceEnrollmentStatus = "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+
+export type FaceEnrollmentDto = {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  pose: FaceEnrollmentPose;
+  imageUrl: string;
+  qualityScore: number | null;
+  status: FaceEnrollmentStatus;
+  rejectedReason: string | null;
+  enrolledAtISO: string;
+  approvedAtISO: string | null;
+  device: string | null;
+  foremanName: string;
+  approvedByName: string | null;
+};
+
+export type FaceVerificationAttemptDto = {
+  id: string;
+  confidence: number;
+  livenessPassed: boolean | null;
+  processingTimeMs: number | null;
+  createdAtISO: string;
+  matchedPose: string | null;
+  workDateISO: string | null;
+};
+
+/** List face enrollments (reference photos) by status. Defaults to the review queue. */
+export async function apiAdminFaceEnrollments(
+  status: FaceEnrollmentStatus = "PENDING_APPROVAL",
+): Promise<{ enrollments: FaceEnrollmentDto[] }> {
+  return apiFetch(`/api/app/admin/face-enrollments?status=${status}`, {
+    auth: true,
+  });
+}
+
+export async function apiAdminApproveFaceEnrollment(
+  enrollmentId: string,
+): Promise<{ enrollment: { id: string; status: string; approvedAt: string | null } }> {
+  return apiFetch(
+    `/api/app/admin/face-enrollments/${encodeURIComponent(enrollmentId)}/approve`,
+    { method: "POST", auth: true },
+  );
+}
+
+export async function apiAdminRejectFaceEnrollment(
+  enrollmentId: string,
+  reason: string,
+): Promise<{ enrollment: { id: string; status: string; rejectedReason: string | null } }> {
+  return apiFetch(
+    `/api/app/admin/face-enrollments/${encodeURIComponent(enrollmentId)}/reject`,
+    { method: "POST", body: JSON.stringify({ reason }), auth: true },
+  );
+}
+
+/** Permanently deletes one reference photo (Verified tab profile view). */
+export async function apiAdminDeleteFaceEnrollment(
+  enrollmentId: string,
+): Promise<{ success: true }> {
+  return apiFetch(
+    `/api/app/admin/face-enrollments/${encodeURIComponent(enrollmentId)}`,
+    { method: "DELETE", auth: true },
+  );
+}
+
+/** Recent scan-out verification attempts for one employee (profile dialog history). */
+export async function apiAdminEmployeeFaceVerificationHistory(
+  employeeId: string,
+): Promise<{ attempts: FaceVerificationAttemptDto[] }> {
+  return apiFetch(
+    `/api/app/admin/employees/${encodeURIComponent(employeeId)}/face-verification-history`,
     { auth: true },
   );
 }

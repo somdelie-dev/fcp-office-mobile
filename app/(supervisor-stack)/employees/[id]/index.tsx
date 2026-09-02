@@ -1,13 +1,11 @@
-import { router, Stack, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 
 import {
   FaceScreenBackground,
-  Header,
   HeroCard,
   IdentityStatusCard,
-  PrimaryActions,
 } from "@/components/team";
 import { useFaceTheme } from "@/components/team/faceTheme";
 import ReferencePhotosCard, {
@@ -15,8 +13,8 @@ import ReferencePhotosCard, {
   ReferenceAngleState,
 } from "@/components/team/ReferencePhotosCard";
 import {
-  apiForemanEmployee,
-  apiListFaceEnrollments,
+  apiSupervisorEmployee,
+  apiSupervisorListFaceEnrollments,
   EmployeeDto,
 } from "@/lib/apiClient";
 
@@ -36,11 +34,12 @@ const ANGLE_ORDER: ReferenceAngleKey[] = [
   "neutral",
 ];
 
-export default function SingleTeamScreen() {
-  // `useLocalSearchParams` can hand back a fresh array/object reference for
-  // `id` on successive recomputations even when the value hasn't changed —
-  // coercing to a plain string here keeps it a stable primitive so effects
-  // that depend on it don't re-fire on every render (see timesheets/[id].tsx).
+// Supervisor equivalent of (foreman-stack)/workers/[id]/index.tsx — same
+// reference-photo status view, but no Verify action: supervisors view and
+// add reference photos, they don't run the live verify-match test.
+export default function SupervisorEmployeeScreen() {
+  // See foreman-stack's timesheets/[id].tsx for why `id` is coerced to a
+  // stable string rather than used straight from useLocalSearchParams.
   const params = useLocalSearchParams<{ id: string }>();
   const id = String(params.id ?? "");
   const { colors, typography, spacing } = useFaceTheme();
@@ -65,8 +64,10 @@ export default function SingleTeamScreen() {
     setError(null);
     try {
       const [employeeRes, enrollmentsRes] = await Promise.all([
-        apiForemanEmployee(id),
-        apiListFaceEnrollments(id).catch(() => ({ enrollments: [] })),
+        apiSupervisorEmployee(id),
+        apiSupervisorListFaceEnrollments(id).catch(() => ({
+          enrollments: [],
+        })),
       ]);
 
       setEmployee(employeeRes.employee);
@@ -106,14 +107,9 @@ export default function SingleTeamScreen() {
       ? "pending"
       : "missing";
 
-  const handleBack = useCallback(() => {
-    if (router.canGoBack()) router.back();
-  }, []);
-
   if (loading) {
     return (
       <FaceScreenBackground>
-        <Stack.Screen options={{ headerLeft: () => null }} />
         <View
           style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
         >
@@ -126,7 +122,6 @@ export default function SingleTeamScreen() {
   if (error || !employee) {
     return (
       <FaceScreenBackground>
-        <Stack.Screen options={{ headerLeft: () => null }} />
         <View
           style={{
             flex: 1,
@@ -136,7 +131,7 @@ export default function SingleTeamScreen() {
           }}
         >
           <Text style={[typography.body, { textAlign: "center" }]}>
-            {error ?? "Profile not found."}
+            {error ?? "Worker not found."}
           </Text>
         </View>
       </FaceScreenBackground>
@@ -145,14 +140,11 @@ export default function SingleTeamScreen() {
 
   return (
     <FaceScreenBackground>
-      <Stack.Screen options={{ headerLeft: () => null }} />
-
       <ScrollView
         contentContainerStyle={{
-          paddingHorizontal: 19,
-          paddingTop: 8,
-          paddingBottom: 20,
-          gap: 10,
+          paddingHorizontal: spacing.lg,
+          paddingBottom: spacing.xl,
+          gap: spacing.md,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -178,16 +170,7 @@ export default function SingleTeamScreen() {
           angles={angles}
           onCapturePress={() =>
             router.push({
-              pathname: "/(foreman-stack)/workers/[id]/capture-reference",
-              params: { id: employee.id },
-            })
-          }
-        />
-
-        <PrimaryActions
-          onVerifyPress={() =>
-            router.push({
-              pathname: "/(foreman-stack)/workers/[id]/verify",
+              pathname: "/(supervisor-stack)/employees/[id]/capture-reference",
               params: { id: employee.id },
             })
           }

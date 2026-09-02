@@ -1,6 +1,6 @@
 import { GradientBackground } from "@/components/GradientBackground";
-import { SyncQueueIcon } from "@/components/OfflineStatus";
 import AnimatedTabBar from "@/components/foreman/AnimatedTabBar";
+import { fill3DTransitionSpec, forFill3D } from "@/components/foreman/tabSceneTransition";
 import { Tabs } from "expo-router";
 import React from "react";
 import { LogoHeader } from "../../components/LogoHeader";
@@ -26,8 +26,9 @@ export default function ForemanTabs() {
       <Tabs
         tabBar={(props) => <AnimatedTabBar {...props} />}
         screenOptions={{
-          headerTitle: () => <LogoHeader />,
-          headerRight: () => <SyncQueueIcon />,
+          sceneStyleInterpolator: forFill3D,
+          transitionSpec: fill3DTransitionSpec,
+          header: () => <LogoHeader />,
           headerShadowVisible: true,
           headerStyle: {
             backgroundColor: colors.headerBg,
@@ -41,6 +42,7 @@ export default function ForemanTabs() {
         <Tabs.Screen name="scan-outs" options={{ title: "Scan Outs" }} />
         <Tabs.Screen name="workers" options={{ title: "Team" }} />
         <Tabs.Screen name="timesheets" options={{ title: "AT Sheets" }} />
+        <Tabs.Screen name="tutorial" options={{ title: "Tutorial" }} />
       </Tabs>
     </GradientBackground>
   );

@@ -1,25 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useRef, useState } from "react";
-import {
-  Image,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useAuth } from "../lib/auth";
 import { useNotifications } from "../lib/useNotifications";
 import { useTheme } from "../lib/themeContext";
 import { ThemeToggle } from "./ThemeToggle";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export function LogoHeader() {
   const router = useRouter();
   const { signOut } = useAuth();
   const { theme } = useTheme();
   const { unreadCount } = useNotifications();
+  const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
   const avatarRef = useRef<View>(null);
@@ -42,7 +36,7 @@ export function LogoHeader() {
   };
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, { paddingTop: insets.top }]}>
       <View style={styles.container}>
         <Image
           source={require("../assets/logo.png")}
@@ -58,7 +52,11 @@ export function LogoHeader() {
             onPress={() => router.push("/(foreman-stack)/notifications")}
             style={styles.bellWrap}
           >
-            <Ionicons name="notifications-outline" size={26} color={iconColor} />
+            <Ionicons
+              name="notifications-outline"
+              size={26}
+              color={iconColor}
+            />
             {unreadCount > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>
@@ -169,25 +167,35 @@ function MenuItem({ icon, label, onPress, danger, style }: MenuItemProps) {
 const styles = StyleSheet.create({
   wrapper: {
     zIndex: 100,
+    width: "100%",
+    marginHorizontal: 0,
+    paddingHorizontal: 0,
+    backgroundColor: "transparent",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.08)",
   },
+
   container: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     width: "100%",
     height: 44,
-    paddingTop: Platform.OS === "ios" ? 10 : 0,
+    paddingHorizontal: 12,
     paddingBottom: 6,
   },
+
   logo: {
     height: 38,
     width: 150,
   },
+
   bellWrap: {
     position: "relative",
     justifyContent: "center",
     alignItems: "center",
   },
+
   badge: {
     position: "absolute",
     top: -4,
@@ -200,16 +208,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 3,
   },
+
   badgeText: {
     color: "#fff",
     fontSize: 9,
     fontWeight: "700",
     lineHeight: 12,
   },
+
   backdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.3)",
   },
+
   menu: {
     position: "absolute",
     backgroundColor: "rgba(255,255,255,0.98)",
@@ -223,6 +234,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 20,
   },
+
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -231,6 +243,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "rgba(0,0,0,0.05)",
   },
+
   menuItemLast: {
     borderBottomWidth: 0,
   },

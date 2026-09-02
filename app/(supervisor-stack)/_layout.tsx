@@ -5,7 +5,7 @@ export default function SupervisorStackLayout() {
   return (
     <Stack
       screenOptions={{
-        headerTitle: () => <LogoHeader />,
+        header: () => <LogoHeader />,
         headerShadowVisible: true,
         headerStyle: {
           // oklch(20.8% 0.042 265.755)

@@ -1,12 +1,7 @@
-import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import { Image, StyleSheet, Text, View } from "react-native";
 
 import { useFaceTheme } from "./faceTheme";
-import FacePreview from "./FacePreview";
-import GlassPanel from "./GlassPanel";
-import StatusChip from "./StatusChip";
 
 interface HeroCardProps {
   name: string;
@@ -14,161 +9,222 @@ interface HeroCardProps {
   photoUri?: string | null;
   isActive?: boolean;
   isFaceReady?: boolean;
-  /** Overrides the bottom footer label, e.g. "Identity Ready" / "Setup Required". */
   identityStatusLabel?: string;
   identityReady?: boolean;
 }
 
-function ShieldCheckIcon({ color }: { color: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M12 2.5L20 5.5V11.2C20 16.1 16.6 20.4 12 21.5C7.4 20.4 4 16.1 4 11.2V5.5L12 2.5Z"
-        stroke={color}
-        strokeWidth={1.8}
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M9 12.2L11.2 14.4L15.4 9.8"
-        stroke={color}
-        strokeWidth={1.8}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
-
-/**
- * HeroCard
- *
- * The centerpiece of the Face Verification home screen. Presents the
- * worker's biometric identity as a premium terminal readout: badge,
- * glowing portrait, name, coded identifier pill, live status chips, and a
- * footer confirming readiness — mirroring the "scan complete" summary
- * screens on commercial biometric hardware (BioStation / Hikvision).
- */
 export default function HeroCard({
   name,
   workerCode,
   photoUri,
   isActive = true,
-  isFaceReady = true,
-  identityStatusLabel,
-  identityReady = true,
+  identityStatusLabel = "Setup Required",
+  identityReady = false,
 }: HeroCardProps) {
-  const { colors, typography, radius, spacing } = useFaceTheme();
-  const footerLabel =
-    identityStatusLabel ??
-    (identityReady ? "Identity Ready" : "Setup Required");
-  const footerColor = identityReady ? colors.success : colors.warning;
+  const { colors, typography } = useFaceTheme();
+
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
 
   return (
-    <GlassPanel elevated radius={5} contentPadding={0} style={styles.wrapper}>
-      <LinearGradient
-        colors={colors.gradientHero}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={styles.gradient}
-      >
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.glassFill,
+          borderColor: colors.glassBorder,
+        },
+      ]}
+    >
+      <View style={styles.identityRow}>
         <View
           style={[
-            styles.body,
+            styles.avatar,
             {
-              paddingTop: spacing.xl,
-              paddingHorizontal: spacing.lg,
-              paddingBottom: spacing.lg,
+              backgroundColor: colors.primary,
+              borderColor: colors.glassBorder,
             },
           ]}
         >
-          <View style={{ marginBottom: spacing.lg }}>
-            <FacePreview photoUri={photoUri} />
-          </View>
+          {photoUri ? (
+            <Image
+              source={{ uri: photoUri }}
+              style={styles.avatarImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <Text
+              style={[
+                typography.bodyStrong,
+                styles.initials,
+                {
+                  color: colors.textOnPrimary,
+                },
+              ]}
+            >
+              {initials}
+            </Text>
+          )}
+        </View>
 
+        <View style={styles.identityText}>
           <Text
-            style={[typography.display, { textAlign: "center" }]}
             numberOfLines={1}
+            style={[
+              typography.bodyStrong,
+              {
+                color: colors.textPrimary,
+                fontSize: 16,
+              },
+            ]}
           >
             {name}
           </Text>
 
-          <View
+          <Text
+            numberOfLines={1}
             style={[
-              styles.codePill,
+              typography.caption,
               {
-                marginTop: spacing.sm,
-                paddingVertical: spacing.xxs,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.pill,
-                backgroundColor: colors.glassFill,
-                borderColor: colors.glassBorder,
+                color: colors.textSecondary,
+                marginTop: 1,
               },
             ]}
           >
-            <Text
-              style={[
-                typography.mono,
-                { color: colors.textPrimary, letterSpacing: 1.2 },
-              ]}
-            >
-              {workerCode}
-            </Text>
-          </View>
+            Code {workerCode}
+          </Text>
+        </View>
+      </View>
 
+      <View style={styles.badges}>
+        <View
+          style={[
+            styles.badge,
+            {
+              backgroundColor: isActive
+                ? "rgba(0, 140, 35, 0.20)"
+                : "rgba(120, 120, 120, 0.15)",
+            },
+          ]}
+        >
           <View
-            style={[styles.chipRow, { gap: spacing.xs, marginTop: spacing.lg }]}
+            style={[
+              styles.statusDot,
+              {
+                backgroundColor: isActive
+                  ? colors.success
+                  : colors.textTertiary,
+              },
+            ]}
+          />
+
+          <Text
+            style={[
+              typography.caption,
+              {
+                color: isActive ? colors.success : colors.textSecondary,
+                fontSize: 11,
+                fontWeight: "700",
+              },
+            ]}
           >
-            {isActive && <StatusChip label="Active" tone="success" />}
-            {isFaceReady && <StatusChip label="Face Ready" tone="info" />}
-          </View>
+            {isActive ? "Active" : "Inactive"}
+          </Text>
         </View>
 
         <View
           style={[
-            styles.footer,
+            styles.badge,
             {
-              gap: spacing.xs,
-              paddingVertical: spacing.md,
-              borderTopColor: colors.glassBorder,
-              backgroundColor: colors.glassFill,
+              backgroundColor: identityReady
+                ? "rgba(0, 140, 35, 0.20)"
+                : "rgba(160, 100, 0, 0.20)",
             },
           ]}
         >
-          <ShieldCheckIcon color={footerColor} />
-          <Text style={[typography.bodyStrong, { color: footerColor }]}>
-            {footerLabel}
+          <Text
+            style={[
+              typography.caption,
+              {
+                color: identityReady ? colors.success : colors.warning,
+                fontSize: 11,
+                fontWeight: "700",
+              },
+            ]}
+          >
+            {identityReady ? "Identity ready" : identityStatusLabel}
           </Text>
         </View>
-      </LinearGradient>
-    </GlassPanel>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    width: "100%",
+  card: {
+    borderWidth: 1,
+    borderRadius: 5,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 12,
   },
-  gradient: {
-    width: "100%",
-  },
-  body: {
+
+  identityRow: {
+    flexDirection: "row",
     alignItems: "center",
   },
-  badge: {
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    borderWidth: 1,
+
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 5,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    // borderWidth: 1,
   },
-  codePill: {
-    borderWidth: 1,
+
+  avatarImage: {
+    width: "100%",
+    height: "100%",
   },
-  chipRow: {
+
+  initials: {
+    fontSize: 17,
+    fontWeight: "700",
+  },
+
+  identityText: {
+    flex: 1,
+    marginLeft: 12,
+    paddingRight: 4,
+  },
+
+  badges: {
     flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+    marginLeft: 0,
   },
-  footer: {
+
+  badge: {
+    minHeight: 23,
+    paddingHorizontal: 9,
+    borderRadius: 7,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderTopWidth: 1,
+  },
+
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 5,
   },
 });

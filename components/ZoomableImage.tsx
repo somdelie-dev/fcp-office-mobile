@@ -1,5 +1,12 @@
-import React from "react";
-import { Image, StyleSheet, View, type ImageStyle } from "react-native";
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  StyleSheet,
+  View,
+  type ImageStyle,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   useAnimatedStyle,
@@ -30,6 +37,9 @@ export function ZoomableImage({
   minScale = 1,
   maxScale = 5,
 }: ZoomableImageProps) {
+  const [status, setStatus] = useState<"loading" | "loaded" | "error">(
+    "loading",
+  );
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -100,10 +110,33 @@ export function ZoomableImage({
       <GestureDetector gesture={composed}>
         <AnimatedImage
           source={{ uri }}
-          style={[{ width, height, borderRadius } as ImageStyle, animatedStyle]}
+          style={[
+            { width, height, borderRadius, opacity: status === "loaded" ? 1 : 0 } as ImageStyle,
+            animatedStyle,
+          ]}
           resizeMode="contain"
+          onLoad={() => setStatus("loaded")}
+          onError={() => setStatus("error")}
         />
       </GestureDetector>
+
+      {status !== "loaded" && (
+        <View style={[StyleSheet.absoluteFill, styles.overlay]} pointerEvents="none">
+          {status === "error" ? (
+            <Ionicons name="image-outline" size={32} color="#94a3b8" />
+          ) : (
+            <ActivityIndicator size="large" color="#fff" />
+          )}
+        </View>
+      )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  overlay: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.15)",
+  },
+});

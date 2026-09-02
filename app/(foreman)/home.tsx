@@ -23,12 +23,22 @@ import ForemanDownloadTimesheetModal from "@/components/ForemanDownloadTimesheet
 import { ForemanTutorial } from "@/components/ForemanTutorial";
 import ScanInCubeFace from "@/components/foreman/ScanInCubeFace";
 import { GlassPanel } from "@/components/team";
-import { useFaceTheme, type FaceColorPalette } from "@/components/team/faceTheme";
+import {
+  useFaceTheme,
+  type FaceColorPalette,
+} from "@/components/team/faceTheme";
 import {
   CubeSpinStage,
   type CubeSpinStageHandle,
 } from "@/components/transitions/CubeSpinStage";
 import { Ionicons } from "@expo/vector-icons";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 
 import {
   apiForemanDayCached,
@@ -44,6 +54,34 @@ import { useAuth } from "../../lib/auth";
 import { getCurrentFortnight, isISOInRange } from "../../lib/fortnight";
 import { getSelectedSiteId, setSelectedSiteId } from "../../lib/sitePrefs";
 import { SCAN_CUBE_TRANSITION_ENABLED } from "../../lib/transitionFlags";
+import { ArrowBigDownIcon } from "lucide-react-native";
+
+// Nudges the eye toward the site dropdown just below - a small vertical
+// bounce, looped indefinitely while this row is on screen.
+function BouncingDownArrow({ color }: { color: string }) {
+  const translateY = useSharedValue(0);
+
+  useEffect(() => {
+    translateY.value = withRepeat(
+      withSequence(
+        withTiming(6, { duration: 500 }),
+        withTiming(0, { duration: 500 }),
+      ),
+      -1,
+      true,
+    );
+  }, [translateY]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <ArrowBigDownIcon size={16} color={color} />
+    </Animated.View>
+  );
+}
 
 function todayLabel() {
   const d = new Date();
@@ -93,8 +131,7 @@ export default function ForemanHome() {
   // cached responses that pre-date this field).
   const [scanOutFaceEnabled, setScanOutFaceEnabled] = useState(true);
   const [scanOutPhotoEnabled, setScanOutPhotoEnabled] = useState(true);
-  const [scanOutMethodPickerOpen, setScanOutMethodPickerOpen] =
-    useState(false);
+  const [scanOutMethodPickerOpen, setScanOutMethodPickerOpen] = useState(false);
 
   const [siteName, setSiteName] = useState<string>("");
   const [scannedCount, setScannedCount] = useState<number>(0);
@@ -527,301 +564,324 @@ export default function ForemanHome() {
       front={
         <AuthStyleBackground>
           <ForemanTutorial />
-      <ScrollView
-        style={styles.wrap}
-        contentContainerStyle={{ paddingTop: 8, paddingBottom: 32, gap: 12 }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.success}
-            colors={[colors.success]}
-          />
-        }
-      >
-        <GlassPanel contentPadding={16} radius={5} elevated showSheen>
-          <Text style={typography.title}>
-            {getTimeGreeting()}, {safeName(user?.name)}
-          </Text>
-
-          <View style={styles.dateRow}>
-            <Text style={typography.body}>{todayLabel()}</Text>
-            <Pressable
-              onPress={onRefresh}
-              style={styles.refreshPill}
-              disabled={loading}
-            >
-              {refreshing ? (
-                <ActivityIndicator size="small" color={colors.success} />
-              ) : (
-                <Ionicons name="refresh" size={16} color={colors.textSecondary} />
-              )}
-              <Text style={styles.refreshTxt}>Refresh</Text>
-            </Pressable>
-          </View>
-
-          {flags > 0 ? (
-            <View style={{ flexDirection: "row", marginTop: 10 }}>
-              <View style={styles.flagBadge}>
-                <Text style={styles.flagBadgeTxt}>
-                  {flags} flag{flags === 1 ? "" : "s"}
-                </Text>
-              </View>
-            </View>
-          ) : null}
-
-          <Pressable
-            style={styles.downloadTimesheetBtn}
-            onPress={() => setDownloadModalOpen(true)}
+          <ScrollView
+            style={styles.wrap}
+            contentContainerStyle={{
+              paddingTop: 8,
+              paddingBottom: 32,
+              gap: 12,
+            }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.success}
+                colors={[colors.success]}
+              />
+            }
           >
-            <Ionicons
-              name="download-outline"
-              size={16}
-              color={colors.success}
-            />
-            <Text style={styles.downloadTimesheetTxt}>Download Timesheet</Text>
-          </Pressable>
-        </GlassPanel>
-
-        <GlassPanel contentPadding={16} radius={5}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={typography.headline}>Site</Text>
-            <Text style={typography.caption}>{sites.length} active</Text>
-          </View>
-
-          {sites.length === 0 ? (
-            <View style={{ marginTop: 10, gap: 10 }}>
-              <Text style={[typography.body, { lineHeight: 18 }]}>
-                No active sites found. Ask your supervisor to assign you to a
-                site.
+            <GlassPanel contentPadding={16} radius={5} elevated showSheen>
+              <Text style={typography.title}>
+                {getTimeGreeting()}, {safeName(user?.name)}
               </Text>
 
+              <View style={styles.dateRow}>
+                <Text style={typography.body}>{todayLabel()}</Text>
+                <Pressable
+                  onPress={onRefresh}
+                  style={styles.refreshPill}
+                  disabled={loading}
+                >
+                  {refreshing ? (
+                    <ActivityIndicator size="small" color={colors.success} />
+                  ) : (
+                    <Ionicons
+                      name="refresh"
+                      size={16}
+                      color={colors.textSecondary}
+                    />
+                  )}
+                  <Text style={styles.refreshTxt}>Refresh</Text>
+                </Pressable>
+              </View>
+
+              {flags > 0 ? (
+                <View style={{ flexDirection: "row", marginTop: 10 }}>
+                  <View style={styles.flagBadge}>
+                    <Text style={styles.flagBadgeTxt}>
+                      {flags} flag{flags === 1 ? "" : "s"}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
               <Pressable
-                style={styles.btnSecondary}
-                onPress={() => loadMeAndSites(true)}
-              >
-                <Text style={typography.bodyStrong}>Try again</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <>
-              <Pressable
-                style={styles.siteDropdownTrigger}
-                onPress={() => sites.length > 1 && setDropdownOpen(true)}
+                style={styles.downloadTimesheetBtn}
+                onPress={() => setDownloadModalOpen(true)}
               >
                 <Ionicons
-                  name="location-outline"
+                  name="download-outline"
                   size={16}
                   color={colors.success}
                 />
-                <Text style={styles.siteDropdownTxt} numberOfLines={1}>
-                  {selectedSite?.name ?? "Select a site"}
+                <Text style={styles.downloadTimesheetTxt}>
+                  Download Timesheet
                 </Text>
-                {sites.length > 1 && (
-                  <Ionicons
-                    name="chevron-down"
-                    size={16}
-                    color={colors.textTertiary}
-                  />
-                )}
               </Pressable>
+            </GlassPanel>
 
-              {!siteId ? (
-                <Text style={[typography.caption, { marginTop: 10 }]}>
-                  Choose a site above to start scanning.
-                </Text>
-              ) : (
-                <View style={styles.todayCard}>
-                  <Text style={typography.label}>Today&apos;s Site</Text>
-                  <Text style={typography.headline} numberOfLines={2}>
-                    {siteName || selectedSite?.name || "—"}
+            <GlassPanel contentPadding={16} radius={5}>
+              <View style={styles.cardHeaderRow}>
+                <View style={styles.cardHeaderTitle}>
+                  <Text style={typography.headline}>Click Select Site</Text>
+                  <BouncingDownArrow color={colors.textTertiary} />
+                </View>
+                <Text style={typography.caption}>{sites.length} active</Text>
+              </View>
+
+              {sites.length === 0 ? (
+                <View style={{ marginTop: 10, gap: 10 }}>
+                  <Text style={[typography.body, { lineHeight: 18 }]}>
+                    No active sites found. Ask your supervisor to assign you to
+                    a site.
                   </Text>
 
-                  <View style={styles.statsRow}>
-                    <MiniStat
-                      colors={colors}
-                      radius={radius}
-                      label="Scanned"
-                      value={String(scannedCount)}
-                    />
-                    <MiniStat
-                      colors={colors}
-                      radius={radius}
-                      label="Scanned Out"
-                      value={String(scannedOutCount)}
-                    />
-                  </View>
-
-                  {hasPhotoRequest && (
-                    <View style={styles.photoRequestPill}>
-                      <Text style={styles.photoRequestPillTxt}>
-                        New site photo request
-                      </Text>
-                    </View>
-                  )}
-
-                  {error ? (
-                    <View style={styles.errorBox}>
-                      <Text style={styles.errorText}>{error}</Text>
-                      <Pressable
-                        style={styles.retryPill}
-                        onPress={() =>
-                          siteId
-                            ? refreshTodayForSite(siteId)
-                            : loadMeAndSites()
-                        }
-                      >
-                        <Text style={typography.bodyStrong}>Retry</Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
-
                   <Pressable
-                    style={styles.btnPrimary}
-                    onPress={() => setConfirmScan("IN")}
+                    style={styles.btnSecondary}
+                    onPress={() => loadMeAndSites(true)}
                   >
-                    <Text style={styles.btnPrimaryTxt}>SCAN IN GUYS</Text>
+                    <Text style={typography.bodyStrong}>Try again</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <>
+                  <Pressable
+                    style={styles.siteDropdownTrigger}
+                    onPress={() => sites.length > 1 && setDropdownOpen(true)}
+                  >
+                    <Ionicons
+                      name="location-outline"
+                      size={16}
+                      color={colors.success}
+                    />
+                    <Text style={styles.siteDropdownTxt} numberOfLines={1}>
+                      {selectedSite?.name ?? "Select a site"}
+                    </Text>
+                    {sites.length > 1 && (
+                      <Ionicons
+                        name="chevron-down"
+                        size={16}
+                        color={colors.textTertiary}
+                      />
+                    )}
                   </Pressable>
 
-                  {/* Single scan-out entry point. Routes straight to
+                  {!siteId ? (
+                    <Text style={[typography.caption, { marginTop: 10 }]}>
+                      Choose a site above to start scanning.
+                    </Text>
+                  ) : (
+                    <View style={styles.todayCard}>
+                      <Text style={typography.label}>Today&apos;s Site</Text>
+                      <Text style={typography.headline} numberOfLines={2}>
+                        {siteName || selectedSite?.name || "—"}
+                      </Text>
+
+                      <View style={styles.statsRow}>
+                        <MiniStat
+                          colors={colors}
+                          radius={radius}
+                          label="Scanned"
+                          value={String(scannedCount)}
+                        />
+                        <MiniStat
+                          colors={colors}
+                          radius={radius}
+                          label="Scanned Out"
+                          value={String(scannedOutCount)}
+                        />
+                      </View>
+
+                      {hasPhotoRequest && (
+                        <View style={styles.photoRequestPill}>
+                          <Text style={styles.photoRequestPillTxt}>
+                            New site photo request
+                          </Text>
+                        </View>
+                      )}
+
+                      {error ? (
+                        <View style={styles.errorBox}>
+                          <Text style={styles.errorText}>{error}</Text>
+                          <Pressable
+                            style={styles.retryPill}
+                            onPress={() =>
+                              siteId
+                                ? refreshTodayForSite(siteId)
+                                : loadMeAndSites()
+                            }
+                          >
+                            <Text style={typography.bodyStrong}>Retry</Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
+
+                      <Pressable
+                        style={styles.btnPrimary}
+                        onPress={() => setConfirmScan("IN")}
+                      >
+                        <Text style={styles.btnPrimaryTxt}>SCAN IN GUYS</Text>
+                      </Pressable>
+
+                      {/* Single scan-out entry point. Routes straight to
                       whichever method is admin-enabled (Settings > System
                       > Scan-Out Method); asks via goScanOut's picker sheet
                       when both are on. Only shown once someone is actually
                       still scanned in — nothing to scan out otherwise. */}
-                  {pendingScanOutCount > 0 && (
-                    <Pressable
-                      style={styles.btnOutline}
-                      onPress={() => setConfirmScan("OUT")}
-                    >
-                      <Text style={styles.btnOutlineTxt}>
-                        SCAN OUT GUYS ({pendingScanOutCount})
-                      </Text>
-                    </Pressable>
+                      {pendingScanOutCount > 0 && (
+                        <Pressable
+                          style={styles.btnOutline}
+                          onPress={() => setConfirmScan("OUT")}
+                        >
+                          <Text style={styles.btnOutlineTxt}>
+                            SCAN OUT GUYS ({pendingScanOutCount})
+                          </Text>
+                        </Pressable>
+                      )}
+                    </View>
                   )}
-                </View>
+                </>
               )}
-            </>
-          )}
-        </GlassPanel>
+            </GlassPanel>
 
-        <Text style={styles.footerHint}>
-          Tip: select the correct site before scanning to avoid flags.
-        </Text>
-      </ScrollView>
-
-      <Modal
-        visible={dropdownOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDropdownOpen(false)}
-      >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setDropdownOpen(false)}
-        >
-          <Pressable style={styles.modalSheet} onPress={() => {}}>
-            <Text style={[typography.label, { marginBottom: 8 }]}>
-              Select a site
+            <Text style={styles.footerHint}>
+              Tip: select the correct site before scanning to avoid flags.
             </Text>
-            <ScrollView style={{ maxHeight: 360 }}>
-              {sites.map((s) => {
-                const active = s.id === siteId;
-                return (
-                  <Pressable
-                    key={s.id}
-                    style={[styles.modalRow, active && styles.modalRowActive]}
-                    onPress={() => handleSelectSite(s.id)}
-                  >
-                    <Text
-                      style={[
-                        typography.bodyStrong,
-                        active && { color: colors.success },
-                      ]}
-                    >
-                      {s.name}
-                    </Text>
-                    {active && (
-                      <Ionicons
-                        name="checkmark"
-                        size={18}
-                        color={colors.success}
-                      />
-                    )}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </ScrollView>
 
-      <Modal
-        visible={scanOutMethodPickerOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setScanOutMethodPickerOpen(false)}
-      >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setScanOutMethodPickerOpen(false)}
-        >
-          <Pressable style={styles.modalSheet} onPress={() => {}}>
-            <Text style={[typography.label, { marginBottom: 8 }]}>
-              Scan out with
-            </Text>
+          <Modal
+            visible={dropdownOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setDropdownOpen(false)}
+          >
             <Pressable
-              style={styles.modalRow}
-              onPress={() => navigateToScanOut("FACE")}
+              style={styles.modalBackdrop}
+              onPress={() => setDropdownOpen(false)}
             >
-              <Text style={typography.bodyStrong}>Face Scan Out</Text>
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={colors.textTertiary}
-              />
+              <Pressable style={styles.modalSheet} onPress={() => {}}>
+                <Text style={[typography.label, { marginBottom: 8 }]}>
+                  Select a site
+                </Text>
+                <ScrollView style={{ maxHeight: 360 }}>
+                  {sites.map((s) => {
+                    const active = s.id === siteId;
+                    return (
+                      <Pressable
+                        key={s.id}
+                        style={[
+                          styles.modalRow,
+                          active && styles.modalRowActive,
+                        ]}
+                        onPress={() => handleSelectSite(s.id)}
+                      >
+                        <Text
+                          style={[
+                            typography.bodyStrong,
+                            active && { color: colors.success },
+                          ]}
+                        >
+                          {s.name}
+                        </Text>
+                        {active && (
+                          <Ionicons
+                            name="checkmark"
+                            size={18}
+                            color={colors.success}
+                          />
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </Pressable>
             </Pressable>
+          </Modal>
+
+          <Modal
+            visible={scanOutMethodPickerOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setScanOutMethodPickerOpen(false)}
+          >
             <Pressable
-              style={styles.modalRow}
-              onPress={() => navigateToScanOut("PHOTO")}
+              style={styles.modalBackdrop}
+              onPress={() => setScanOutMethodPickerOpen(false)}
             >
-              <Text style={typography.bodyStrong}>Photo Scan Out</Text>
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={colors.textTertiary}
-              />
+              <Pressable style={styles.modalSheet} onPress={() => {}}>
+                <Text style={[typography.label, { marginBottom: 8 }]}>
+                  Scan out with
+                </Text>
+                <Pressable
+                  style={styles.modalRow}
+                  onPress={() => navigateToScanOut("FACE")}
+                >
+                  <Text style={typography.bodyStrong}>Face Scan Out</Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color={colors.textTertiary}
+                  />
+                </Pressable>
+                <Pressable
+                  style={styles.modalRow}
+                  onPress={() => navigateToScanOut("PHOTO")}
+                >
+                  <Text style={typography.bodyStrong}>Photo Scan Out</Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color={colors.textTertiary}
+                  />
+                </Pressable>
+              </Pressable>
             </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </Modal>
 
-      <CustomAlert
-        visible={confirmScan !== null}
-        title={confirmScan === "OUT" ? "Confirm scan out" : "Confirm scan in"}
-        message={`Scan ${confirmScan === "OUT" ? "out" : "in"} for ${
-          siteName || selectedSite?.name || "this site"
-        }?`}
-        onDismiss={() => setConfirmScan(null)}
-        buttons={[
-          { text: "Cancel", style: "cancel" },
-          ...(sites.length > 1
-            ? [{ text: "Change Site", onPress: () => setDropdownOpen(true) }]
-            : []),
-          {
-            text: "Continue",
-            onPress: () => {
-              if (confirmScan === "OUT") goScanOut();
-              else if (confirmScan === "IN") goScanIn();
-            },
-          },
-        ]}
-      />
+          <CustomAlert
+            visible={confirmScan !== null}
+            title={
+              confirmScan === "OUT" ? "Confirm scan out" : "Confirm scan in"
+            }
+            message={`Scan ${confirmScan === "OUT" ? "out" : "in"} for ${
+              siteName || selectedSite?.name || "this site"
+            }?`}
+            onDismiss={() => setConfirmScan(null)}
+            buttons={[
+              { text: "Cancel", style: "cancel" },
+              ...(sites.length > 1
+                ? [
+                    {
+                      text: "Change Site",
+                      onPress: () => setDropdownOpen(true),
+                    },
+                  ]
+                : []),
+              {
+                text: "Continue",
+                onPress: () => {
+                  if (confirmScan === "OUT") goScanOut();
+                  else if (confirmScan === "IN") goScanIn();
+                },
+              },
+            ]}
+          />
 
-      <ForemanDownloadTimesheetModal
-        visible={downloadModalOpen}
-        onClose={() => setDownloadModalOpen(false)}
-      />
+          <ForemanDownloadTimesheetModal
+            visible={downloadModalOpen}
+            onClose={() => setDownloadModalOpen(false)}
+          />
         </AuthStyleBackground>
       }
     />
@@ -853,7 +913,9 @@ function MiniStat({
         gap: 4,
       }}
     >
-      <Text style={{ fontSize: 16, fontWeight: "800", color: colors.textPrimary }}>
+      <Text
+        style={{ fontSize: 16, fontWeight: "800", color: colors.textPrimary }}
+      >
         {value}
       </Text>
       <Text
@@ -894,7 +956,11 @@ const getStyles = (
       alignItems: "center",
       gap: 6,
     },
-    refreshTxt: { color: colors.textSecondary, fontWeight: "700", fontSize: 12 },
+    refreshTxt: {
+      color: colors.textSecondary,
+      fontWeight: "700",
+      fontSize: 12,
+    },
 
     cardHeaderRow: {
       flexDirection: "row",
@@ -968,7 +1034,11 @@ const getStyles = (
       borderRadius: radius.sm,
       alignItems: "center",
     },
-    btnPrimaryTxt: { color: colors.textOnPrimary, fontWeight: "800", letterSpacing: 1 },
+    btnPrimaryTxt: {
+      color: colors.textOnPrimary,
+      fontWeight: "800",
+      letterSpacing: 1,
+    },
 
     btnOutline: {
       marginTop: 8,
@@ -979,7 +1049,11 @@ const getStyles = (
       borderWidth: 1,
       borderColor: colors.success,
     },
-    btnOutlineTxt: { color: colors.success, fontWeight: "800", letterSpacing: 1 },
+    btnOutlineTxt: {
+      color: colors.success,
+      fontWeight: "800",
+      letterSpacing: 1,
+    },
 
     photoRequestPill: {
       marginTop: 6,
@@ -989,7 +1063,11 @@ const getStyles = (
       borderRadius: radius.pill,
       backgroundColor: colors.primaryDim,
     },
-    photoRequestPillTxt: { color: colors.primary, fontWeight: "800", fontSize: 12 },
+    photoRequestPillTxt: {
+      color: colors.primary,
+      fontWeight: "800",
+      fontSize: 12,
+    },
 
     btnSecondary: {
       backgroundColor: colors.glassFillStrong,
@@ -1012,7 +1090,12 @@ const getStyles = (
       justifyContent: "space-between",
       gap: 10,
     },
-    errorText: { flex: 1, color: colors.danger, fontWeight: "800", fontSize: 12 },
+    errorText: {
+      flex: 1,
+      color: colors.danger,
+      fontWeight: "800",
+      fontSize: 12,
+    },
     retryPill: {
       paddingVertical: 8,
       paddingHorizontal: 10,
@@ -1057,5 +1140,10 @@ const getStyles = (
       backgroundColor: colors.successDim,
       borderRadius: radius.sm,
       paddingHorizontal: 10,
+    },
+    cardHeaderTitle: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
     },
   });

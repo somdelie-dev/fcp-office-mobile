@@ -7,6 +7,7 @@ import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../lib/themeContext";
 import AnimatedTabBar from "@/components/foreman/AnimatedTabBar";
+import { fill3DTransitionSpec, forFill3D } from "@/components/foreman/tabSceneTransition";
 
 const themes = {
   dark: {
@@ -42,14 +43,16 @@ export default function AdminTabs() {
     <GradientBackground>
       <Tabs
         tabBar={(props) => <AnimatedTabBar {...props} />}
-        screenOptions={{
-          headerTitle: () => <LogoHeader />,
-          headerShadowVisible: true,
-          headerStyle: {
-            backgroundColor: colors.headerBg,
-            borderBottomWidth: 2,
-            borderBottomColor: colors.headerBorder,
-          },
+      screenOptions={{
+  sceneStyleInterpolator: forFill3D,
+  transitionSpec: fill3DTransitionSpec,
+  header: () => <LogoHeader />,
+
+  headerShadowVisible: false,
+
+  headerStyle: {
+    backgroundColor: "transparent",
+  },
 
           tabBarShowLabel: true,
           tabBarLabelStyle: {

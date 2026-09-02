@@ -22,6 +22,8 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import * as WebBrowser from "expo-web-browser";
 
+import { router } from "expo-router";
+
 import { AuthStyleBackground } from "@/components/AuthStyleBackground";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import {
@@ -95,24 +97,28 @@ function EmployeeCard({
   onImagePress,
   onDeactivate,
   onDownloadCard,
+  onFaceRefsPress,
 }: {
   item: ApiEmployee;
   colors: (typeof themes)["light"];
   onImagePress: () => void;
   onDeactivate: () => void;
   onDownloadCard: () => void;
+  onFaceRefsPress: () => void;
 }) {
   const initials = getInitials(item.fullName);
   const isForeman = item.isForeman === true;
 
   return (
-    <View
-      style={[
+    <Pressable
+      onPress={onFaceRefsPress}
+      style={({ pressed }) => [
         styles.card,
         {
           backgroundColor: isForeman ? colors.foremanCardBg : colors.cardBg,
           borderColor: isForeman ? colors.foremanCardBorder : colors.cardBorder,
         },
+        pressed && { opacity: 0.85 },
       ]}
     >
       {/* Foreman Badge */}
@@ -206,7 +212,7 @@ function EmployeeCard({
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -592,6 +598,12 @@ export default function SupervisorEmployeesScreen() {
               }}
               onDeactivate={() => handleToggleActive(item)}
               onDownloadCard={() => handleDownloadCard(item)}
+              onFaceRefsPress={() =>
+                router.push({
+                  pathname: "/(supervisor-stack)/employees/[id]",
+                  params: { id: item.id },
+                })
+              }
             />
           )}
           columnWrapperStyle={styles.gridRow}

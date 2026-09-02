@@ -14,14 +14,16 @@ export function AuthStyleBackground({ children }: Props) {
   // consistent across light/dark instead of the old ad hoc blue/navy tint.
   const BG = colors.background;
   const CIRCLE_BG = isDark ? colors.primaryGreenDim : colors.primaryGreen;
-  const CIRCLE_INNER_BG = isDark ? "rgba(34, 197, 94, 0.08)" : colors.surfaceElevated;
+  const CIRCLE_INNER_BG = isDark
+    ? "rgba(34, 197, 94, 0.08)"
+    : colors.surfaceElevated;
 
   return (
     <SafeAreaView
       style={[styles.safe, { backgroundColor: BG }]}
       edges={["bottom"]}
     >
-      <View style={[styles.container, { backgroundColor: BG }]}>
+      <View style={[styles.container, { backgroundColor: "transparent" }]}>
         {/* Decorative circles */}
         <View
           style={[

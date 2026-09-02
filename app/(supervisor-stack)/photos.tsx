@@ -27,6 +27,9 @@ import {
   type SupervisorSiteDayPhotoDto,
 } from "@/lib/apiClient";
 import { useTheme } from "@/lib/themeContext";
+import { FaceScanOutsPanel } from "@/components/supervisor/FaceScanOutsPanel";
+
+type ScanOutTab = "PHOTO" | "FACE";
 
 const { width } = Dimensions.get("window");
 const GRID_GAP = 10;
@@ -267,9 +270,11 @@ function PhotoGrid({
   );
 }
 
-export default function SupervisorPhotosScreen() {
+export default function SupervisorScanOutsScreen() {
   const { theme } = useTheme();
   const colors = themes[theme];
+
+  const [activeTab, setActiveTab] = useState<ScanOutTab>("PHOTO");
 
   const [photos, setPhotos] = useState<SupervisorSiteDayPhotoDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -397,224 +402,265 @@ export default function SupervisorPhotosScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>
-            Photo Verification
+            Scan Outs
           </Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Last 7 days
-          </Text>
+          {activeTab === "PHOTO" && (
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              Last 7 days
+            </Text>
+          )}
         </View>
 
-        <View style={styles.searchSection}>
-          <View
-            style={[
-              styles.searchContainer,
-              {
-                backgroundColor: colors.inputBg,
-                borderColor: colors.inputBorder,
-              },
-            ]}
-          >
-            <Ionicons
-              name="search-outline"
-              size={20}
-              color={colors.textSecondary}
-            />
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search site, foreman or status"
-              placeholderTextColor={colors.textSecondary}
-              style={[styles.searchInput, { color: colors.textPrimary }]}
-              returnKeyType="search"
-              autoCapitalize="none"
-            />
-            {!!search && (
-              <Pressable onPress={() => setSearch("")} hitSlop={8}>
+        <View style={styles.tabRow}>
+          {(
+            [
+              { key: "PHOTO", label: "Photo scan-outs" },
+              { key: "FACE", label: "Face scan-outs" },
+            ] as const
+          ).map((tab) => {
+            const active = activeTab === tab.key;
+            return (
+              <Pressable
+                key={tab.key}
+                onPress={() => setActiveTab(tab.key)}
+                style={[
+                  styles.tabButton,
+                  {
+                    backgroundColor: active ? "#16A34A" : colors.inputBg,
+                    borderColor: active ? "#16A34A" : colors.inputBorder,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tabButtonText,
+                    { color: active ? "#fff" : colors.textPrimary },
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {activeTab === "FACE" ? (
+          <FaceScanOutsPanel />
+        ) : (
+          <>
+            <View style={styles.searchSection}>
+              <View
+                style={[
+                  styles.searchContainer,
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderColor: colors.inputBorder,
+                  },
+                ]}
+              >
                 <Ionicons
-                  name="close-circle"
+                  name="search-outline"
                   size={20}
                   color={colors.textSecondary}
                 />
-              </Pressable>
-            )}
-          </View>
-        </View>
-
-        {loading && !refreshing ? (
-          <LoadingOverlay visible message="Loading photos..." />
-        ) : error ? (
-          <View style={styles.errorWrap}>
-            <Ionicons name="alert-circle" size={48} color="#ef4444" />
-            <Text style={[styles.errorText, { color: colors.textPrimary }]}>
-              {error}
-            </Text>
-            <Pressable onPress={load} style={styles.retryBtn}>
-              <Text style={styles.retryText}>Retry</Text>
-            </Pressable>
-          </View>
-        ) : groupedPhotos.length === 0 ? (
-          <View style={styles.emptyWrap}>
-            <Ionicons
-              name="images-outline"
-              size={64}
-              color={colors.emptyText}
-            />
-            <Text style={[styles.emptyText, { color: colors.emptyText }]}>
-              {search.trim()
-                ? "No photos match your search"
-                : "No photos submitted in the last 7 days"}
-            </Text>
-          </View>
-        ) : (
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={refresh} />
-            }
-          >
-            {groupedPhotos.map((group) => (
-              <View key={group.dateKey} style={styles.dateSection}>
-                <Text
-                  style={[styles.dateHeading, { color: colors.textPrimary }]}
-                >
-                  {group.heading}
-                </Text>
-                <PhotoGrid
-                  photos={group.photos}
-                  colors={colors}
-                  onPhotoPress={setSelectedPhoto}
+                <TextInput
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Search site, foreman or status"
+                  placeholderTextColor={colors.textSecondary}
+                  style={[styles.searchInput, { color: colors.textPrimary }]}
+                  returnKeyType="search"
+                  autoCapitalize="none"
                 />
-              </View>
-            ))}
-          </ScrollView>
-        )}
-
-        {/* Full Image Modal */}
-        <Modal
-          visible={!!selectedPhoto}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setSelectedPhoto(null)}
-        >
-          <KeyboardAvoidingView
-            style={styles.modalOverlay}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-          >
-            <Pressable
-              style={styles.modalClose}
-              onPress={() => setSelectedPhoto(null)}
-            >
-              <Ionicons name="close-circle" size={36} color="#fff" />
-            </Pressable>
-            {selectedPhoto && (
-              <ScrollView
-                contentContainerStyle={styles.modalScroll}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="none"
-              >
-                <View key={selectedPhoto.id} style={styles.modalImageWrap}>
-                  <ZoomableImage
-                    uri={selectedPhoto.imageUrl}
-                    width={width - 32}
-                    height={width - 32}
-                    borderRadius={12}
-                  />
-                </View>
-
-                <View style={styles.modalInfo}>
-                  <View style={styles.modalBadge}>
-                    <Ionicons name="location" size={14} color="#fff" />
-                    <Text style={styles.modalBadgeText}>
-                      {selectedPhoto.siteName}
-                    </Text>
-                  </View>
-                  <View style={styles.modalBadge}>
-                    <Ionicons name="person" size={14} color="#fff" />
-                    <Text style={styles.modalBadgeText}>
-                      {selectedPhoto.foremanName}
-                    </Text>
-                  </View>
-                  <View style={styles.modalBadge}>
-                    <Ionicons name="time" size={14} color="#fff" />
-                    <Text style={styles.modalBadgeText}>
-                      Taken at {formatPhotoTime(selectedPhoto)}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.currentStatus}>
-                  <Text style={styles.currentStatusText}>
-                    {verificationStatus}
-                  </Text>
-                </View>
-
-                {showRejectInput && (
-                  <TextInput
-                    style={styles.rejectInput}
-                    placeholder="Rejection reason (optional)"
-                    placeholderTextColor="#94a3b8"
-                    value={rejectNotes}
-                    onChangeText={setRejectNotes}
-                    multiline
-                    autoFocus
-                    blurOnSubmit={false}
-                  />
+                {!!search && (
+                  <Pressable onPress={() => setSearch("")} hitSlop={8}>
+                    <Ionicons
+                      name="close-circle"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                  </Pressable>
                 )}
+              </View>
+            </View>
 
-                {isPending ? (
-                  <View style={styles.actionRow}>
-                    <Pressable
-                      style={[styles.actionBtn, styles.verifyBtn]}
-                      disabled={submittingAction !== null}
-                      onPress={handleVerify}
+            {loading && !refreshing ? (
+              <LoadingOverlay visible message="Loading photos..." />
+            ) : error ? (
+              <View style={styles.errorWrap}>
+                <Ionicons name="alert-circle" size={48} color="#ef4444" />
+                <Text style={[styles.errorText, { color: colors.textPrimary }]}>
+                  {error}
+                </Text>
+                <Pressable onPress={load} style={styles.retryBtn}>
+                  <Text style={styles.retryText}>Retry</Text>
+                </Pressable>
+              </View>
+            ) : groupedPhotos.length === 0 ? (
+              <View style={styles.emptyWrap}>
+                <Ionicons
+                  name="images-outline"
+                  size={64}
+                  color={colors.emptyText}
+                />
+                <Text style={[styles.emptyText, { color: colors.emptyText }]}>
+                  {search.trim()
+                    ? "No photos match your search"
+                    : "No photos submitted in the last 7 days"}
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                  <RefreshControl refreshing={refreshing} onRefresh={refresh} />
+                }
+              >
+                {groupedPhotos.map((group) => (
+                  <View key={group.dateKey} style={styles.dateSection}>
+                    <Text
+                      style={[styles.dateHeading, { color: colors.textPrimary }]}
                     >
-                      {submittingAction === "VERIFY" ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={20}
-                          color="#fff"
-                        />
-                      )}
-                      <Text style={styles.actionBtnText}>
-                        {submittingAction === "VERIFY"
-                          ? "Verifying..."
-                          : "Verify"}
-                      </Text>
-                    </Pressable>
-
-                    <Pressable
-                      style={[styles.actionBtn, styles.rejectBtn]}
-                      disabled={submittingAction !== null}
-                      onPress={handleReject}
-                    >
-                      {submittingAction === "REJECT" ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <Ionicons
-                          name="close-circle"
-                          size={20}
-                          color="#fff"
-                        />
-                      )}
-                      <Text style={styles.actionBtnText}>
-                        {submittingAction === "REJECT"
-                          ? "Rejecting..."
-                          : showRejectInput
-                            ? "Confirm Reject"
-                            : "Reject"}
-                      </Text>
-                    </Pressable>
+                      {group.heading}
+                    </Text>
+                    <PhotoGrid
+                      photos={group.photos}
+                      colors={colors}
+                      onPhotoPress={setSelectedPhoto}
+                    />
                   </View>
-                ) : null}
+                ))}
               </ScrollView>
             )}
-          </KeyboardAvoidingView>
-        </Modal>
+
+            {/* Full Image Modal */}
+            <Modal
+              visible={!!selectedPhoto}
+              transparent
+              animationType="fade"
+              onRequestClose={() => setSelectedPhoto(null)}
+            >
+              <KeyboardAvoidingView
+                style={styles.modalOverlay}
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+              >
+                <Pressable
+                  style={styles.modalClose}
+                  onPress={() => setSelectedPhoto(null)}
+                >
+                  <Ionicons name="close-circle" size={36} color="#fff" />
+                </Pressable>
+                {selectedPhoto && (
+                  <ScrollView
+                    contentContainerStyle={styles.modalScroll}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="none"
+                  >
+                    <View key={selectedPhoto.id} style={styles.modalImageWrap}>
+                      <ZoomableImage
+                        uri={selectedPhoto.imageUrl}
+                        width={width - 32}
+                        height={width - 32}
+                        borderRadius={12}
+                      />
+                    </View>
+
+                    <View style={styles.modalInfo}>
+                      <View style={styles.modalBadge}>
+                        <Ionicons name="location" size={14} color="#fff" />
+                        <Text style={styles.modalBadgeText}>
+                          {selectedPhoto.siteName}
+                        </Text>
+                      </View>
+                      <View style={styles.modalBadge}>
+                        <Ionicons name="person" size={14} color="#fff" />
+                        <Text style={styles.modalBadgeText}>
+                          {selectedPhoto.foremanName}
+                        </Text>
+                      </View>
+                      <View style={styles.modalBadge}>
+                        <Ionicons name="time" size={14} color="#fff" />
+                        <Text style={styles.modalBadgeText}>
+                          Taken at {formatPhotoTime(selectedPhoto)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.currentStatus}>
+                      <Text style={styles.currentStatusText}>
+                        {verificationStatus}
+                      </Text>
+                    </View>
+
+                    {showRejectInput && (
+                      <TextInput
+                        style={styles.rejectInput}
+                        placeholder="Rejection reason (optional)"
+                        placeholderTextColor="#94a3b8"
+                        value={rejectNotes}
+                        onChangeText={setRejectNotes}
+                        multiline
+                        autoFocus
+                        blurOnSubmit={false}
+                      />
+                    )}
+
+                    {isPending ? (
+                      <View style={styles.actionRow}>
+                        <Pressable
+                          style={[styles.actionBtn, styles.verifyBtn]}
+                          disabled={submittingAction !== null}
+                          onPress={handleVerify}
+                        >
+                          {submittingAction === "VERIFY" ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : (
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={20}
+                              color="#fff"
+                            />
+                          )}
+                          <Text style={styles.actionBtnText}>
+                            {submittingAction === "VERIFY"
+                              ? "Verifying..."
+                              : "Verify"}
+                          </Text>
+                        </Pressable>
+
+                        <Pressable
+                          style={[styles.actionBtn, styles.rejectBtn]}
+                          disabled={submittingAction !== null}
+                          onPress={handleReject}
+                        >
+                          {submittingAction === "REJECT" ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : (
+                            <Ionicons
+                              name="close-circle"
+                              size={20}
+                              color="#fff"
+                            />
+                          )}
+                          <Text style={styles.actionBtnText}>
+                            {submittingAction === "REJECT"
+                              ? "Rejecting..."
+                              : showRejectInput
+                                ? "Confirm Reject"
+                                : "Reject"}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </ScrollView>
+                )}
+              </KeyboardAvoidingView>
+            </Modal>
+          </>
+        )}
       </View>
     </AuthStyleBackground>
   );
@@ -642,6 +688,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
+  },
+  tabRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: GRID_PADDING,
+    paddingBottom: 12,
+  },
+  tabButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 5,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  tabButtonText: {
+    fontSize: 13,
+    fontWeight: "800",
   },
   searchSection: {
     paddingHorizontal: GRID_PADDING,

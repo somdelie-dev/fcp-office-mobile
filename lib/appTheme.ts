@@ -15,7 +15,11 @@
  */
 
 import { useTheme } from "./themeContext";
-import { DarkColors, LightColors, type FaceColorPalette } from "../components/team/faceTheme";
+import {
+  DarkColors,
+  LightColors,
+  type FaceColorPalette,
+} from "../components/team/faceTheme";
 
 export interface AppColorTokens {
   background: string;

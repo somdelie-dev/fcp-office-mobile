@@ -2,7 +2,7 @@ import { AuthStyleBackground } from "@/components/AuthStyleBackground";
 import { GlassCard } from "@/components/GlassCard";
 import { useTheme } from "@/lib/themeContext";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, {
     useCallback,
     useEffect,
@@ -61,6 +61,7 @@ function extractEmployeeCode(payload: string): string | null {
 }
 
 export default function AssistantScan() {
+  const router = useRouter();
   const params = useLocalSearchParams<{ siteId?: string }>();
   const dateISO = useMemo(() => todayISO(), []);
 
@@ -605,6 +606,13 @@ export default function AssistantScan() {
             </View>
           ) : null}
 
+          <Pressable
+            style={styles.scanOutButton}
+            onPress={() => router.push("/(assistant)/scan-out-face")}
+          >
+            <Text style={styles.scanOutButtonText}>Scan Out (Face)</Text>
+          </Pressable>
+
           <Text style={[styles.sub, { color: isDark ? "#94a3b8" : "#666" }]}>
             {site
               ? `Site: ${site.name} • Date: ${dateISO}`
@@ -1046,6 +1054,14 @@ const styles = StyleSheet.create({
   },
 
   h1: { fontSize: 18, fontWeight: "900", color: "#111" },
+  scanOutButton: {
+    marginTop: 8,
+    backgroundColor: NAVY,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  scanOutButtonText: { color: "#fff", fontWeight: "900" },
   sub: { color: "#666", fontWeight: "800" },
   hint: { color: "#666", fontWeight: "800", fontSize: 12 },
 

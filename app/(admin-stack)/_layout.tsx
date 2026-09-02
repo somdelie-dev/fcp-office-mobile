@@ -5,7 +5,7 @@ export default function AdminStackLayout() {
   return (
     <Stack
       screenOptions={{
-        headerTitle: () => <LogoHeader />,
+        header: () => <LogoHeader />,
         headerShadowVisible: true,
         headerStyle: {
           // Match supervisor/foreman stack header styling

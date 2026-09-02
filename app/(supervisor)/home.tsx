@@ -324,7 +324,9 @@ export default function SupervisorHome() {
             <ActionButton
               icon="swap-horizontal"
               label="Adjust Attendance"
-              onPress={() => router.push("/(supervisor-stack)/transfer-employee")}
+              onPress={() =>
+                router.push("/(supervisor-stack)/transfer-employee")
+              }
               theme={colors}
             />
             {/* <ActionButton
@@ -335,7 +337,7 @@ export default function SupervisorHome() {
             /> */}
             <ActionButton
               icon="images"
-              label="Photo Verification"
+              label="Scan outs"
               onPress={() => router.push("/(supervisor-stack)/photos")}
               theme={colors}
             />
@@ -344,6 +346,12 @@ export default function SupervisorHome() {
               icon="person"
               label="Manage Your Guys"
               onPress={() => router.push("/(supervisor-stack)/employees")}
+              theme={colors}
+            />
+            <ActionButton
+              icon="scan"
+              label="Face Verification"
+              onPress={() => router.push("/(supervisor-stack)/face-verifications")}
               theme={colors}
             />
             <ActionButton

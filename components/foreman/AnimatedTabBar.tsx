@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useState } from "react";
 import {
   LayoutChangeEvent,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -69,6 +70,10 @@ const ICONS: Record<string, IconPair> = {
   timesheets: {
     active: "document-text",
     inactive: "document-text-outline",
+  },
+  tutorial: {
+    active: "play-circle",
+    inactive: "play-circle-outline",
   },
 };
 
@@ -280,11 +285,13 @@ export default function AnimatedTabBar({
         style={[
           styles.bar,
           {
-            // Grow the bar by the system bottom inset (Android gesture/3-button
-            // nav, iOS home indicator) instead of a fixed height, so the
-            // original tab-control area is never squeezed and the themed
-            // background fills the safe-area strip with no visible gap.
-            height: BAR_HEIGHT + insets.bottom,
+            // Grow the bar by the system bottom inset so Android's
+            // gesture/3-button nav never crowds it. iOS's home indicator
+            // inset is already accounted for in BAR_HEIGHT's own bottom
+            // padding, so adding it again here pushed the row up too far
+            // on iPhone - Android only.
+            height:
+              BAR_HEIGHT + (Platform.OS === "android" ? insets.bottom : 0),
             backgroundColor: colors.backgroundElevated,
             borderColor: colors.glassBorder,
           },

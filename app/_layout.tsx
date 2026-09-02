@@ -79,6 +79,14 @@ function NotificationNavigator() {
           pathname: "/(foreman-stack)/SiteDayPhotoScreen",
         });
       }
+
+      // Handle scan-out / face verification crew reminder taps
+      if (
+        data.type === "SCAN_OUT_REMINDER" ||
+        data.type === "FACE_VERIFICATION_MISSING"
+      ) {
+        router.push("/(foreman)/workers");
+      }
     });
 
     return cleanup;

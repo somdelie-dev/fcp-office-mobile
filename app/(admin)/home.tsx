@@ -10,6 +10,7 @@ import {
   DollarSign,
   QrCode,
   ArrowLeftRight,
+  ScanFace,
   Shield,
   UserCheck,
   UserCog,
@@ -40,6 +41,7 @@ import {
 } from "@/lib/apiClient";
 import { getCurrentFortnight, type Fortnight } from "@/lib/fortnight";
 import { useTheme } from "@/lib/themeContext";
+import { useAuth } from "@/lib/auth";
 
 type FortnightColumn = {
   iso: string;
@@ -80,6 +82,7 @@ export default function AdminHomeScreen() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const router = useRouter();
+  const { user, updateUser } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -221,10 +224,10 @@ export default function AdminHomeScreen() {
           <View style={styles.headerContent}>
             <View style={styles.titleSection}>
               <Text style={[styles.h1, { color: textMain }]}>
-                Admin Dashboard
+                Welcome back, {user?.name?.split(" ")[0] ?? "there"}!
               </Text>
               <Text style={[styles.sub, { color: textSub }]}>
-                Real-time workforce overview
+                Real-time dashboard overview
               </Text>
             </View>
             <View style={styles.iconBadge}>
@@ -238,38 +241,34 @@ export default function AdminHomeScreen() {
             </Text>
           ) : null}
         </GlassCard>
+        {/* Attendance Chart */}
+        <GlassCard
+          style={[
+            styles.chartCard,
+            {
+              backgroundColor: isDark
+                ? "rgba(15,23,42,0.85)"
+                : "rgba(255,255,255,0.9)",
+            },
+          ]}
+        >
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={[styles.sectionTitle, { color: textMain }]}>
+                Fortnight Attendance
+              </Text>
+              <Text style={[styles.sub, { color: textSub }]}>
+                14-day scan activity
+              </Text>
+            </View>
+            <BarChart3 size={20} color="#3b82f6" strokeWidth={2} />
+          </View>
 
-        {/* Stats Grid with Gradient Cards */}
-        <View style={styles.grid}>
-          <StatCard
-            title="Active Team"
-            value={stats.employees}
-            icon={Users}
-            gradient={["#3b82f6", "#1e40af"]}
-            isDark={isDark}
+          <MiniBars
+            columns={fortnight ? build14Columns(fortnight.startISO) : []}
+            scans={scansPerDay}
           />
-          <StatCard
-            title="Active Sites"
-            value={stats.sites}
-            icon={Building2}
-            gradient={["#10b981", "#047857"]}
-            isDark={isDark}
-          />
-          <StatCard
-            title="Foremen"
-            value={stats.foremen}
-            icon={UserCheck}
-            gradient={["#f59e0b", "#d97706"]}
-            isDark={isDark}
-          />
-          <StatCard
-            title="Supervisors"
-            value={stats.supervisors ?? "—"}
-            icon={Shield}
-            gradient={["#8b5cf6", "#6d28d9"]}
-            isDark={isDark}
-          />
-        </View>
+        </GlassCard>
 
         {/* Quick Actions */}
         <GlassCard
@@ -441,6 +440,42 @@ export default function AdminHomeScreen() {
                 {
                   backgroundColor: pressed
                     ? isDark
+                      ? "rgba(6,182,212,0.25)"
+                      : "rgba(6,182,212,0.12)"
+                    : isDark
+                      ? "rgba(6,182,212,0.15)"
+                      : "rgba(6,182,212,0.08)",
+                },
+              ]}
+              onPress={() =>
+                router.push("/(admin-stack)/face-verifications" as any)
+              }
+            >
+              <View
+                style={[
+                  styles.quickActionIcon,
+                  { backgroundColor: "rgba(6,182,212,0.2)" },
+                ]}
+              >
+                <ScanFace size={20} color="#06b6d4" strokeWidth={2.2} />
+              </View>
+              <View style={styles.quickActionText}>
+                <Text style={[styles.quickActionTitle, { color: textMain }]}>
+                  Face Verifications
+                </Text>
+                <Text style={[styles.quickActionSub, { color: textSub }]}>
+                  Approve reference photos
+                </Text>
+              </View>
+              <ChevronRight size={18} color={textSub} />
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.quickActionBtn,
+                {
+                  backgroundColor: pressed
+                    ? isDark
                       ? "rgba(236,72,153,0.25)"
                       : "rgba(236,72,153,0.12)"
                     : isDark
@@ -510,18 +545,31 @@ export default function AdminHomeScreen() {
                 styles.quickActionBtn,
                 {
                   backgroundColor: pressed
-                    ? isDark ? "rgba(16,185,129,0.25)" : "rgba(16,185,129,0.12)"
-                    : isDark ? "rgba(16,185,129,0.15)" : "rgba(16,185,129,0.08)",
+                    ? isDark
+                      ? "rgba(16,185,129,0.25)"
+                      : "rgba(16,185,129,0.12)"
+                    : isDark
+                      ? "rgba(16,185,129,0.15)"
+                      : "rgba(16,185,129,0.08)",
                 },
               ]}
               onPress={() => router.push("/(admin-stack)/materials" as any)}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: "rgba(16,185,129,0.2)" }]}>
+              <View
+                style={[
+                  styles.quickActionIcon,
+                  { backgroundColor: "rgba(16,185,129,0.2)" },
+                ]}
+              >
                 <DollarSign size={20} color="#10b981" strokeWidth={2.2} />
               </View>
               <View style={styles.quickActionText}>
-                <Text style={[styles.quickActionTitle, { color: textMain }]}>Materials</Text>
-                <Text style={[styles.quickActionSub, { color: textSub }]}>Orders &amp; procurement</Text>
+                <Text style={[styles.quickActionTitle, { color: textMain }]}>
+                  Materials
+                </Text>
+                <Text style={[styles.quickActionSub, { color: textSub }]}>
+                  Orders &amp; procurement
+                </Text>
               </View>
               <ChevronRight size={18} color={textSub} />
             </Pressable>
@@ -531,18 +579,31 @@ export default function AdminHomeScreen() {
                 styles.quickActionBtn,
                 {
                   backgroundColor: pressed
-                    ? isDark ? "rgba(99,102,241,0.25)" : "rgba(99,102,241,0.12)"
-                    : isDark ? "rgba(99,102,241,0.15)" : "rgba(99,102,241,0.08)",
+                    ? isDark
+                      ? "rgba(99,102,241,0.25)"
+                      : "rgba(99,102,241,0.12)"
+                    : isDark
+                      ? "rgba(99,102,241,0.15)"
+                      : "rgba(99,102,241,0.08)",
                 },
               ]}
               onPress={() => router.push("/(admin-stack)/plant" as any)}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: "rgba(99,102,241,0.2)" }]}>
+              <View
+                style={[
+                  styles.quickActionIcon,
+                  { backgroundColor: "rgba(99,102,241,0.2)" },
+                ]}
+              >
                 <Building2 size={20} color="#6366f1" strokeWidth={2.2} />
               </View>
               <View style={styles.quickActionText}>
-                <Text style={[styles.quickActionTitle, { color: textMain }]}>Plant &amp; Equipment</Text>
-                <Text style={[styles.quickActionSub, { color: textSub }]}>Active deployments</Text>
+                <Text style={[styles.quickActionTitle, { color: textMain }]}>
+                  Plant &amp; Equipment
+                </Text>
+                <Text style={[styles.quickActionSub, { color: textSub }]}>
+                  Active deployments
+                </Text>
               </View>
               <ChevronRight size={18} color={textSub} />
             </Pressable>
@@ -552,52 +613,67 @@ export default function AdminHomeScreen() {
                 styles.quickActionBtn,
                 {
                   backgroundColor: pressed
-                    ? isDark ? "rgba(236,72,153,0.25)" : "rgba(236,72,153,0.12)"
-                    : isDark ? "rgba(236,72,153,0.15)" : "rgba(236,72,153,0.08)",
+                    ? isDark
+                      ? "rgba(236,72,153,0.25)"
+                      : "rgba(236,72,153,0.12)"
+                    : isDark
+                      ? "rgba(236,72,153,0.15)"
+                      : "rgba(236,72,153,0.08)",
                 },
               ]}
               onPress={() => router.push("/(admin-stack)/suppliers" as any)}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: "rgba(236,72,153,0.2)" }]}>
+              <View
+                style={[
+                  styles.quickActionIcon,
+                  { backgroundColor: "rgba(236,72,153,0.2)" },
+                ]}
+              >
                 <Users size={20} color="#ec4899" strokeWidth={2.2} />
               </View>
               <View style={styles.quickActionText}>
-                <Text style={[styles.quickActionTitle, { color: textMain }]}>Suppliers</Text>
-                <Text style={[styles.quickActionSub, { color: textSub }]}>Manage suppliers</Text>
+                <Text style={[styles.quickActionTitle, { color: textMain }]}>
+                  Suppliers
+                </Text>
+                <Text style={[styles.quickActionSub, { color: textSub }]}>
+                  Manage suppliers
+                </Text>
               </View>
               <ChevronRight size={18} color={textSub} />
             </Pressable>
           </View>
         </GlassCard>
-
-        {/* Attendance Chart */}
-        <GlassCard
-          style={[
-            styles.chartCard,
-            {
-              backgroundColor: isDark
-                ? "rgba(15,23,42,0.85)"
-                : "rgba(255,255,255,0.9)",
-            },
-          ]}
-        >
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={[styles.sectionTitle, { color: textMain }]}>
-                Fortnight Attendance
-              </Text>
-              <Text style={[styles.sub, { color: textSub }]}>
-                14-day scan activity
-              </Text>
-            </View>
-            <BarChart3 size={20} color="#3b82f6" strokeWidth={2} />
-          </View>
-
-          <MiniBars
-            columns={fortnight ? build14Columns(fortnight.startISO) : []}
-            scans={scansPerDay}
+        {/* Stats Grid with Gradient Cards */}
+        <View style={styles.grid}>
+          <StatCard
+            title="Active Team"
+            value={stats.employees}
+            icon={Users}
+            gradient={["#3b82f6", "#1e40af"]}
+            isDark={isDark}
           />
-        </GlassCard>
+          <StatCard
+            title="Active Sites"
+            value={stats.sites}
+            icon={Building2}
+            gradient={["#10b981", "#047857"]}
+            isDark={isDark}
+          />
+          <StatCard
+            title="Foremen"
+            value={stats.foremen}
+            icon={UserCheck}
+            gradient={["#f59e0b", "#d97706"]}
+            isDark={isDark}
+          />
+          <StatCard
+            title="Supervisors"
+            value={stats.supervisors ?? "—"}
+            icon={Shield}
+            gradient={["#8b5cf6", "#6d28d9"]}
+            isDark={isDark}
+          />
+        </View>
 
         {/* Top 5 Sites by Wages */}
         <GlassCard
@@ -766,6 +842,15 @@ function MiniBars(props: { columns: FortnightColumn[]; scans: number[] }) {
 
         return (
           <View key={col.iso} style={styles.barCol}>
+            {scans > 0 && (
+              <Text
+                style={[styles.barValue, { color: barColor }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {scans}
+              </Text>
+            )}
             <View
               style={[
                 styles.bar,
@@ -775,21 +860,7 @@ function MiniBars(props: { columns: FortnightColumn[]; scans: number[] }) {
                   borderColor: borderColor,
                 },
               ]}
-            >
-              {scans > 0 && (
-                <Text
-                  style={[
-                    styles.barValue,
-                    {
-                      color: "#fff",
-                      transform: [{ rotate: "-90deg" }],
-                    },
-                  ]}
-                >
-                  {scans}
-                </Text>
-              )}
-            </View>
+            />
             <Text style={[styles.barLabel, { color: "#64748b" }]}>
               {col.date}
             </Text>
@@ -970,7 +1041,7 @@ const styles = StyleSheet.create({
   },
 
   h1: {
-    fontSize: 26,
+    fontSize: 18,
     fontWeight: "900",
     letterSpacing: -0.5,
   },
@@ -1105,7 +1176,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 4,
     alignItems: "flex-end",
-    height: 80,
     paddingVertical: 8,
   },
 
@@ -1113,9 +1183,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "flex-end",
-    gap: 6,
+    gap: 4,
   },
 
+  // Sits above the bar instead of rotated inside it — a 3-digit value has no
+  // room to stay on one line inside a ~20px-wide bar, which used to wrap.
   barValue: {
     fontSize: 10,
     fontWeight: "800",
@@ -1123,8 +1195,7 @@ const styles = StyleSheet.create({
 
   bar: {
     width: "100%",
-    alignItems: "center",
-    justifyContent: "center",
+    minHeight: 4,
     borderRadius: 4,
     borderWidth: 1.5,
   },
