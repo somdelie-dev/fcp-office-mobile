@@ -257,11 +257,15 @@ export default function ForemanTimesheets() {
     [pastFortnights, selectedPastId],
   );
 
-  const loadPastPeriod = useCallback(async (periodId: string) => {
+  // The backend's `period` query param expects `${startISO}_${endISO}`
+  // (single underscore) — `Fortnight.id` uses a double underscore for
+  // display/selection purposes, so it can't be passed straight through.
+  const loadPastPeriod = useCallback(async (fortnight: Fortnight) => {
     setPastLoading(true);
     setPastError(null);
     try {
-      const res = await apiForemanTimesheetsForPeriod(periodId);
+      const periodParam = `${fortnight.startISO}_${fortnight.endISO}`;
+      const res = await apiForemanTimesheetsForPeriod(periodParam);
       setPastRows(res.timesheets ?? []);
     } catch (e: any) {
       setPastError(e?.message ?? "Failed to load this fortnight.");
@@ -276,16 +280,16 @@ export default function ForemanTimesheets() {
       setScope(next);
       if (next === "ALL" && !selectedPastId && pastFortnights[0]) {
         setSelectedPastId(pastFortnights[0].id);
-        loadPastPeriod(pastFortnights[0].id);
+        loadPastPeriod(pastFortnights[0]);
       }
     },
     [selectedPastId, pastFortnights, loadPastPeriod],
   );
 
   const selectPastFortnight = useCallback(
-    (id: string) => {
-      setSelectedPastId(id);
-      loadPastPeriod(id);
+    (fortnight: Fortnight) => {
+      setSelectedPastId(fortnight.id);
+      loadPastPeriod(fortnight);
     },
     [loadPastPeriod],
   );
@@ -427,7 +431,7 @@ export default function ForemanTimesheets() {
                     ]}
                     onPress={() => {
                       setFortnightDropdownOpen(false);
-                      selectPastFortnight(f.id);
+                      selectPastFortnight(f);
                     }}
                   >
                     <Text
@@ -545,7 +549,9 @@ export default function ForemanTimesheets() {
             <Text style={styles.errorText}>{pastError}</Text>
             <Pressable
               style={styles.btnSecondary}
-              onPress={() => selectedPastId && loadPastPeriod(selectedPastId)}
+              onPress={() =>
+                selectedPastFortnight && loadPastPeriod(selectedPastFortnight)
+              }
             >
               <Text style={styles.btnSecondaryText}>Retry</Text>
             </Pressable>
@@ -673,7 +679,8 @@ export default function ForemanTimesheets() {
                     style={[styles.btnSecondary, { marginTop: 12 }]}
                     onPress={() =>
                       scope === "ALL"
-                        ? selectedPastId && loadPastPeriod(selectedPastId)
+                        ? selectedPastFortnight &&
+                          loadPastPeriod(selectedPastFortnight)
                         : refresh()
                     }
                   >
