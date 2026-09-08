@@ -213,7 +213,7 @@ function FaceCameraStage({
     <View style={styles.stageWrap}>
       <View style={[styles.stageGlow, { shadowColor: ringColor }]} />
       <View style={[styles.stageCircle, { backgroundColor: colors.backgroundDeep, borderColor: colors.glassBorderStrong }]}>
-        <CameraView ref={cameraRef} style={StyleSheet.absoluteFillObject} facing="front" onCameraReady={onReady} />
+        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="front" onCameraReady={onReady} />
       </View>
       <CornerBrackets size={CAMERA_STAGE_SIZE * 0.72} color={ringColor} />
     </View>

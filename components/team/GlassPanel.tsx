@@ -58,12 +58,12 @@ export default function GlassPanel({
       <BlurView
         intensity={40}
         tint={isDark ? "dark" : "light"}
-        style={[StyleSheet.absoluteFillObject, { borderRadius: resolvedRadius }]}
+        style={[StyleSheet.absoluteFill, { borderRadius: resolvedRadius }]}
       />
 
       <View
         style={[
-          StyleSheet.absoluteFillObject,
+          StyleSheet.absoluteFill,
           styles.fill,
           { borderRadius: resolvedRadius, borderColor: colors.glassBorder, backgroundColor: colors.glassFill },
         ]}
@@ -78,7 +78,7 @@ export default function GlassPanel({
           }
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 0.6 }}
-          style={[StyleSheet.absoluteFillObject, { borderRadius: resolvedRadius }]}
+          style={[StyleSheet.absoluteFill, { borderRadius: resolvedRadius }]}
           pointerEvents="none"
         />
       )}

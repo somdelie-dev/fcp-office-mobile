@@ -1,5 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+// expo-router's Tabs passes props shaped by its own vendored bottom-tabs fork
+// (see tabSceneTransition.ts), which has diverged from the real
+// @react-navigation/bottom-tabs types (SDK 56+), so this type must match that.
+import type { BottomTabBarProps } from "expo-router/build/react-navigation/bottom-tabs";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useState } from "react";
 import {
@@ -222,7 +225,7 @@ function ActiveButton({
             colors={["rgba(255,255,255,0.12)", "rgba(255,255,255,0)"]}
             start={{ x: 0.5, y: 0 }}
             end={{ x: 0.5, y: 1 }}
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
           />
 
           <Ionicons

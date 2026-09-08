@@ -707,7 +707,7 @@ export default function SupervisorScanOutFaceScanner() {
             >
               <CameraView
                 ref={cameraRef}
-                style={StyleSheet.absoluteFillObject}
+                style={StyleSheet.absoluteFill}
                 facing={facing}
                 enableTorch={nightMode && facing === "back"}
                 onCameraReady={() => {

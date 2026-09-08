@@ -20,7 +20,7 @@ export default function CornerBrackets({
   return (
     <View
       pointerEvents="none"
-      style={[StyleSheet.absoluteFillObject, styles.container]}
+      style={[StyleSheet.absoluteFill, styles.container]}
     >
       <View
         style={[

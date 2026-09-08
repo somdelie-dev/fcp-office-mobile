@@ -7,7 +7,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router";
 import { useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {
@@ -1020,7 +1020,7 @@ const getStyles = (
     pdfShareText: { color: colors.textOnPrimary, fontWeight: "900", fontSize: 12 },
     pdfViewer: { flex: 1, backgroundColor: colors.bgSecondary },
     pdfLoading: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       justifyContent: "center",
       alignItems: "center",
       gap: 10,

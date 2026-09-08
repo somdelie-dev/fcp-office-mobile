@@ -822,7 +822,7 @@ export default function ScanOutFaceScanner() {
             >
               <CameraView
                 ref={cameraRef}
-                style={StyleSheet.absoluteFillObject}
+                style={StyleSheet.absoluteFill}
                 facing={facing}
                 enableTorch={nightMode && facing === "back"}
                 onCameraReady={() => {

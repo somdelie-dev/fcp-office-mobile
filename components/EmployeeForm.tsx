@@ -1,6 +1,6 @@
 import { AuthStyleBackground } from "@/components/AuthStyleBackground";
 import { GlassCard } from "@/components/GlassCard";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router";
 import { useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {

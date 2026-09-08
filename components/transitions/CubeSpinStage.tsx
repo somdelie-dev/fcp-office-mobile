@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   face: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backfaceVisibility: "hidden",
   },
 });

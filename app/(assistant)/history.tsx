@@ -6,7 +6,7 @@ import {
   listRecentHistory,
 } from "@/lib/assistantHistoryStore";
 import { useTheme } from "@/lib/themeContext";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   Alert,

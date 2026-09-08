@@ -767,7 +767,7 @@ export default function AssistantScanOutFaceScanner() {
             >
               <CameraView
                 ref={cameraRef}
-                style={StyleSheet.absoluteFillObject}
+                style={StyleSheet.absoluteFill}
                 facing={facing}
                 enableTorch={nightMode && facing === "back"}
                 onCameraReady={() => {

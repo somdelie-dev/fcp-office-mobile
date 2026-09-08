@@ -1,4 +1,8 @@
-import { SceneStyleInterpolators, TransitionSpecs } from "@react-navigation/bottom-tabs";
+// expo-router's Tabs no longer allows importing @react-navigation/bottom-tabs
+// directly (SDK 56+). This pulls from expo-router's own vendored copy of the
+// same module (same source, no @react-navigation re-export), which is what
+// Tabs's screenOptions.sceneStyleInterpolator/transitionSpec consume at runtime.
+import { SceneStyleInterpolators, TransitionSpecs } from "expo-router/build/react-navigation/bottom-tabs";
 import { Easing } from "react-native";
 
 type SceneInterpolationProps = Parameters<typeof SceneStyleInterpolators.forFade>[0];

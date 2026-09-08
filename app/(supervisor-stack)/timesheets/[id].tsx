@@ -4,7 +4,7 @@ import { GlassCard } from "@/components/GlassCard";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import { useTheme } from "@/lib/themeContext";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState, useRef } from "react";
 import {

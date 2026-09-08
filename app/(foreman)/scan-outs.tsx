@@ -2,7 +2,7 @@ import { AuthStyleBackground } from "@/components/AuthStyleBackground";
 import { GlassPanel } from "@/components/team";
 import { useFaceTheme, type FaceColorPalette } from "@/components/team/faceTheme";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,

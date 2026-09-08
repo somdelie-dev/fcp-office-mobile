@@ -5,7 +5,7 @@ import LoadingOverlay from "@/components/LoadingOverlay";
 import { formatCurrency } from "@/lib/formatCurrency";
 import { useTheme } from "@/lib/themeContext";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
@@ -1446,7 +1446,7 @@ const styles = StyleSheet.create({
   pdfShareText: { color: "#fff", fontWeight: "900", fontSize: 12 },
   pdfViewer: { flex: 1 },
   pdfLoading: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: "center",
     alignItems: "center",
     gap: 10,

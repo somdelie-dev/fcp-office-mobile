@@ -1,4 +1,4 @@
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router";
 import { File, Paths } from "expo-file-system";
 import { useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
@@ -706,7 +706,7 @@ const styles = StyleSheet.create({
   pdfShareText: { color: "#fff", fontWeight: "900", fontSize: 12 },
   pdfViewer: { flex: 1 },
   pdfLoading: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: "center",
     alignItems: "center",
     gap: 10,

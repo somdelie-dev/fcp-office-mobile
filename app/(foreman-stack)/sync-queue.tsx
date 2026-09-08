@@ -15,7 +15,7 @@ import { cancelQueueItem } from "@/lib/offline/queue";
 import { getOfflineStats } from "@/lib/offline/storage";
 import { forceSyncNow } from "@/lib/offline/sync";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,

@@ -390,7 +390,7 @@ function PoseCameraStage({
       >
         <CameraView
           ref={cameraRef}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           facing={facing}
           onCameraReady={onReady}
         />
@@ -402,7 +402,7 @@ function PoseCameraStage({
         {overlayUri && (
           <Image
             source={{ uri: overlayUri }}
-            // style={StyleSheet.absoluteFillObject}
+            // style={StyleSheet.absoluteFill}
             // resizeMode="contain"
           />
         )}
@@ -415,7 +415,7 @@ function PoseCameraStage({
           >
             <Image
               source={referenceImage}
-              // style={StyleSheet.absoluteFillObject}
+              // style={StyleSheet.absoluteFill}
               // resizeMode="contain"
             />
             {/* <View style={styles.referenceLabelPill}>
@@ -443,7 +443,7 @@ function PoseCameraStage({
           <View style={styles.captureHud} pointerEvents="none">
             <LinearGradient
               colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.82)"]}
-              style={StyleSheet.absoluteFillObject}
+              style={StyleSheet.absoluteFill}
             />
             <View style={styles.captureHudContent}>
               <View style={styles.captureHudRow}>
@@ -523,7 +523,7 @@ function ScannerCornerAccents({ color }: { color: string }) {
   // (photoStage) is what gives that wrapper its size, same trick as
   // scan-out-face's stageGlow/CornerBrackets.
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       {corners.map((corner, i) => (
         <View
           key={i}
@@ -1169,14 +1169,14 @@ export default function CaptureReferencePhotosScreen() {
                       {photos[i] && (
                         <Image
                           source={{ uri: photos[i].uri }}
-                          style={StyleSheet.absoluteFillObject}
+                          style={StyleSheet.absoluteFill}
                           resizeMode="cover"
                         />
                       )}
                       {issue && (
                         <View
                           style={[
-                            StyleSheet.absoluteFillObject,
+                            StyleSheet.absoluteFill,
                             {
                               backgroundColor: "rgba(0,0,0,0.4)",
                               alignItems: "center",
