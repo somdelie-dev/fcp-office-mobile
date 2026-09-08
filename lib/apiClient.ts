@@ -71,7 +71,10 @@ export type AdminSiteListItemDto = {
   id: string;
   name: string;
   code?: string | null;
+  client?: string | null;
   location?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   isActive: boolean;
   createdAt: string;
 };
@@ -175,8 +178,13 @@ export async function apiAdminUpdateSite(
 export async function apiAdminCreateSite(data: {
   name: string;
   code?: string | null;
+  client?: string | null;
   location?: string | null;
   address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  assignmentType?: "SUPERVISOR" | "ADMIN" | null;
+  assignmentUserId?: string | null;
 }): Promise<{ ok: true; site: AdminSiteListItemDto }> {
   return apiFetch("/api/app/admin/sites", {
     method: "POST",
@@ -386,6 +394,7 @@ export type AdminAttendanceScanDto = {
   employeeCode: string;
   siteId: string;
   siteName: string;
+  siteCode: string | null;
   foremanId: string;
   foremanName: string;
   supervisorId: string | null;
@@ -408,9 +417,10 @@ export async function apiAdminAttendanceScans(query?: {
   foremanId?: string;
   supervisorId?: string;
   date?: string;
+  q?: string;
 }): Promise<{
   scans: AdminAttendanceScanDto[];
-  sites: { id: string; name: string }[];
+  sites: { id: string; name: string; code: string | null }[];
   foremen: { id: string; name: string }[];
   supervisors: { id: string; name: string }[];
 }> {
@@ -419,6 +429,7 @@ export async function apiAdminAttendanceScans(query?: {
   if (query?.foremanId) params.set("foremanId", query.foremanId);
   if (query?.supervisorId) params.set("supervisorId", query.supervisorId);
   if (query?.date) params.set("date", query.date);
+  if (query?.q) params.set("q", query.q);
   const qs = params.toString();
   return apiFetch(`/api/app/admin/attendance-scans${qs ? `?${qs}` : ""}`);
 }
