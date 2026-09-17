@@ -22,7 +22,6 @@
     "expo": "^57.0.9",
     "expo-asset": "~57.0.16",
     "expo-audio": "~57.0.4",
-    "expo-av": "~16.0.8",
     "expo-blur": "~57.0.2",
     "expo-build-properties": "~57.0.17",
     "expo-camera": "~57.0.4",
