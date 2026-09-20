@@ -400,7 +400,7 @@ export default function AdminSitesScreen() {
       makes it and the picker peers in the same layer, where zIndex works. */}
       {createModalVisible && (
       <View style={[StyleSheet.absoluteFill, { zIndex: 20000, elevation: 20000 }]}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
             <View style={styles.modalOverlay}>
               <View style={[styles.modalCard, { backgroundColor: isDark ? "rgba(15,23,42,0.98)" : "#fff" }]}>

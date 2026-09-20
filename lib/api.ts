@@ -106,8 +106,11 @@ async function fetchDirect(
 
   while (++attempt <= maxAttempts) {
     const controller = new AbortController();
-    // Use a longer timeout for multipart/form-data uploads (photos can be slow on mobile)
-    const timeoutMs = isFD ? 60000 : 12000; // 60s for uploads, 12s for other requests
+    // Use a longer timeout for multipart/form-data uploads (photos can be slow on mobile).
+    // JSON requests also get a generous window - bulk endpoints (e.g. attendance
+    // scan submission) do several sequential DB round trips server-side and can
+    // legitimately take longer than a few seconds under load or on slow networks.
+    const timeoutMs = isFD ? 60000 : 30000; // 60s for uploads, 30s for other requests
     const t = setTimeout(() => controller.abort(), timeoutMs);
 
     try {

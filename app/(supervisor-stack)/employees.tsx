@@ -356,6 +356,7 @@ export default function SupervisorEmployeesScreen() {
           type: "image/jpeg",
         } as any);
         fd.append("folder", "employees");
+        fd.append("name", `${firstName} ${lastName}`);
 
         const uploadRes = await apiFetch("/api/uploads/image", {
           method: "POST",
@@ -668,7 +669,7 @@ export default function SupervisorEmployeesScreen() {
         >
           <View style={styles.createModalOverlay}>
             <KeyboardAvoidingView
-              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
               style={styles.createKeyboardWrap}
             >
               <View

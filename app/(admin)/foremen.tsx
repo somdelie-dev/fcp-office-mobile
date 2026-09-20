@@ -674,7 +674,7 @@ export default function AdminForemenScreen() {
         onRequestClose={() => setAssistantModalVisible(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={{ flex: 1 }}
         >
           <View

@@ -18,6 +18,7 @@ import {
 
 import { AuthStyleBackground } from "@/components/AuthStyleBackground";
 import LoadingOverlay from "@/components/LoadingOverlay";
+import { SearchablePickerModal } from "@/components/SearchablePickerModal";
 import { ZoomableImage } from "@/components/ZoomableImage";
 import {
   apiAdminDeletePhoto,
@@ -93,47 +94,53 @@ function PhotoCard({
         { backgroundColor: colors.cardBg, borderColor: colors.cardBorder },
       ]}
     >
-      <Image source={{ uri: item.imageUrl }} style={styles.photo} />
-      {/* Site Badge */}
-      <View style={[styles.siteBadge, { backgroundColor: colors.badgeBg }]}>
-        <Ionicons name="location" size={10} color={colors.badgeText} />
-        <Text
-          style={[styles.badgeText, { color: colors.badgeText }]}
-          numberOfLines={1}
-        >
-          {item.siteName}
-        </Text>
+      <View>
+        <Image source={{ uri: item.imageUrl }} style={styles.photo} />
+        {/* Status is short (VERIFIED/PENDING/REJECTED) so it's safe to keep
+        as a small overlay badge; site/foreman names are not, and are shown
+        in full below instead of truncated over the photo. */}
+        <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
+          <Text style={[styles.statusBadgeText, { color: sc.text }]}>
+            {item.verificationStatus}
+          </Text>
+        </View>
       </View>
-      {/* Status Badge */}
-      <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
-        <Text style={[styles.statusBadgeText, { color: sc.text }]}>
-          {item.verificationStatus}
-        </Text>
-      </View>
-      {/* Foreman Badge */}
-      <View style={[styles.foremanBadge, { backgroundColor: colors.badgeBg }]}>
-        <Ionicons name="person" size={10} color={colors.badgeText} />
-        <Text
-          style={[styles.badgeText, { color: colors.badgeText }]}
-          numberOfLines={1}
-        >
-          {item.foremanName}
-        </Text>
-      </View>
-      {/* Upload Time Badge */}
-      <View style={[styles.timeBadge, { backgroundColor: colors.badgeBg }]}>
-        <Ionicons name="time" size={10} color={colors.badgeText} />
-        <Text style={[styles.badgeText, { color: colors.badgeText }]}>
-          {uploadTime}
-        </Text>
+
+      <View style={styles.cardInfo}>
+        <View style={styles.cardInfoRow}>
+          <Ionicons name="location" size={11} color={colors.textSecondary} />
+          <Text style={[styles.cardInfoText, { color: colors.textPrimary }]}>
+            {item.siteCode ? `${item.siteCode} - ${item.siteName}` : item.siteName}
+          </Text>
+        </View>
+        <View style={styles.cardInfoRow}>
+          <Ionicons name="person" size={11} color={colors.textSecondary} />
+          <Text style={[styles.cardInfoText, { color: colors.textPrimary }]}>
+            {item.foremanName}
+          </Text>
+        </View>
+        <View style={styles.cardInfoRow}>
+          <Ionicons name="time" size={11} color={colors.textSecondary} />
+          <Text style={[styles.cardInfoTextMuted, { color: colors.textSecondary }]}>
+            {uploadTime}
+          </Text>
+        </View>
       </View>
     </Pressable>
   );
 }
 
+type FilterOption = { id: string; name: string; code?: string | null } | null;
+
 export default function PhotoVerificationsScreen() {
   const { theme } = useTheme();
   const colors = themes[theme];
+  const isDark = theme === "dark";
+  const pickerColors = {
+    textPrimary: colors.textPrimary,
+    textSecondary: colors.textSecondary,
+    border: colors.inputBorder,
+  };
 
   const [photos, setPhotos] = useState<AdminSiteDayPhotoDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,22 +153,81 @@ export default function PhotoVerificationsScreen() {
   const [rejectNotes, setRejectNotes] = useState("");
   const [showRejectInput, setShowRejectInput] = useState(false);
 
+  const [searchText, setSearchText] = useState("");
+  const [filterSite, setFilterSite] = useState<FilterOption>(null);
+  const [filterForeman, setFilterForeman] = useState<FilterOption>(null);
+  const [filterSupervisor, setFilterSupervisor] = useState<FilterOption>(null);
+  const [siteFilterOpen, setSiteFilterOpen] = useState(false);
+  const [foremanFilterOpen, setForemanFilterOpen] = useState(false);
+  const [supervisorFilterOpen, setSupervisorFilterOpen] = useState(false);
+
   const [filterTab, setFilterTab] = useState<FilterTab>("ALL");
 
+  // Site/foreman/supervisor/search options are derived from the already-
+  // loaded 7-day window rather than a separate request — every photo
+  // already carries its site/foreman/supervisor name, so no round trip is
+  // needed just to populate the filter dropdowns.
+  const siteOptions = useMemo(() => {
+    const map = new Map<string, { name: string; code: string | null }>();
+    for (const p of photos) map.set(p.siteId, { name: p.siteName, code: p.siteCode });
+    return Array.from(map.entries())
+      .map(([id, site]) => ({ id, name: site.name, code: site.code }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [photos]);
+
+  const foremanOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of photos) map.set(p.foremanId, p.foremanName);
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [photos]);
+
+  const supervisorOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of photos) {
+      if (p.supervisorId && p.supervisorName) map.set(p.supervisorId, p.supervisorName);
+    }
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [photos]);
+
+  const searchedPhotos = useMemo(() => {
+    let list = photos;
+    if (filterSite) list = list.filter((p) => p.siteId === filterSite.id);
+    if (filterForeman) list = list.filter((p) => p.foremanId === filterForeman.id);
+    if (filterSupervisor)
+      list = list.filter((p) => p.supervisorId === filterSupervisor.id);
+    const q = searchText.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (p) =>
+          p.siteName.toLowerCase().includes(q) ||
+          p.foremanName.toLowerCase().includes(q) ||
+          (p.supervisorName ?? "").toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [photos, filterSite, filterForeman, filterSupervisor, searchText]);
+
   const filteredPhotos = useMemo(() => {
-    if (filterTab === "ALL") return photos;
-    return photos.filter((p) => p.verificationStatus === filterTab);
-  }, [photos, filterTab]);
+    if (filterTab === "ALL") return searchedPhotos;
+    return searchedPhotos.filter((p) => p.verificationStatus === filterTab);
+  }, [searchedPhotos, filterTab]);
+
+  const hasActiveFilters =
+    !!searchText.trim() || !!filterSite || !!filterForeman || !!filterSupervisor;
 
   const counts = useMemo(() => {
-    const c = { ALL: photos.length, PENDING: 0, VERIFIED: 0, REJECTED: 0 };
-    for (const p of photos) {
+    const c = { ALL: searchedPhotos.length, PENDING: 0, VERIFIED: 0, REJECTED: 0 };
+    for (const p of searchedPhotos) {
       if (p.verificationStatus === "PENDING") c.PENDING++;
       else if (p.verificationStatus === "VERIFIED") c.VERIFIED++;
       else if (p.verificationStatus === "REJECTED") c.REJECTED++;
     }
     return c;
-  }, [photos]);
+  }, [searchedPhotos]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -338,12 +404,142 @@ export default function PhotoVerificationsScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.textPrimary }]}>
-            Scan Outs
+            Scanouts Verifications
           </Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Last 7 days
           </Text>
         </View>
+
+        {/* Search */}
+        <View style={styles.searchWrap}>
+          <View
+            style={[
+              styles.searchBox,
+              { borderColor: colors.inputBorder, backgroundColor: colors.inputBg },
+            ]}
+          >
+            <Ionicons name="search" size={18} color={colors.textSecondary} />
+            <TextInput
+              value={searchText}
+              onChangeText={setSearchText}
+              placeholder="Search site, foreman or supervisor…"
+              placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+              style={[styles.searchInput, { color: colors.textPrimary }]}
+              autoCapitalize="none"
+            />
+            {searchText.length > 0 && (
+              <Pressable onPress={() => setSearchText("")} hitSlop={8}>
+                <Ionicons
+                  name="close-circle"
+                  size={18}
+                  color={colors.textSecondary}
+                />
+              </Pressable>
+            )}
+          </View>
+        </View>
+
+        {/* Site / Foreman / Supervisor filters */}
+        <View style={styles.filterBar}>
+          <Pressable
+            style={[
+              styles.filterTrigger,
+              { borderColor: colors.inputBorder, backgroundColor: colors.inputBg },
+            ]}
+            onPress={() => setSiteFilterOpen(true)}
+          >
+            <Text
+              style={[
+                styles.filterTriggerText,
+                { color: filterSite ? colors.textPrimary : colors.textSecondary },
+              ]}
+              numberOfLines={1}
+            >
+              {filterSite
+                ? filterSite.code
+                  ? `${filterSite.code} - ${filterSite.name}`
+                  : filterSite.name
+                : "All Sites"}
+            </Text>
+            <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
+          </Pressable>
+          <Pressable
+            style={[
+              styles.filterTrigger,
+              { borderColor: colors.inputBorder, backgroundColor: colors.inputBg },
+            ]}
+            onPress={() => setForemanFilterOpen(true)}
+          >
+            <Text
+              style={[
+                styles.filterTriggerText,
+                { color: filterForeman ? colors.textPrimary : colors.textSecondary },
+              ]}
+              numberOfLines={1}
+            >
+              {filterForeman ? filterForeman.name : "All Foremen"}
+            </Text>
+            <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
+          </Pressable>
+          <Pressable
+            style={[
+              styles.filterTrigger,
+              { borderColor: colors.inputBorder, backgroundColor: colors.inputBg },
+            ]}
+            onPress={() => setSupervisorFilterOpen(true)}
+          >
+            <Text
+              style={[
+                styles.filterTriggerText,
+                {
+                  color: filterSupervisor ? colors.textPrimary : colors.textSecondary,
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {filterSupervisor ? filterSupervisor.name : "All Supervisors"}
+            </Text>
+            <Ionicons name="chevron-down" size={14} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+
+        <SearchablePickerModal
+          visible={siteFilterOpen}
+          title="Filter by Site"
+          searchPlaceholder="Search sites or job number…"
+          allLabel="All Sites"
+          options={siteOptions}
+          selectedId={filterSite?.id ?? null}
+          onSelect={setFilterSite}
+          onClose={() => setSiteFilterOpen(false)}
+          colors={pickerColors}
+          isDark={isDark}
+        />
+        <SearchablePickerModal
+          visible={foremanFilterOpen}
+          title="Filter by Foreman"
+          searchPlaceholder="Search foremen…"
+          allLabel="All Foremen"
+          options={foremanOptions}
+          selectedId={filterForeman?.id ?? null}
+          onSelect={setFilterForeman}
+          onClose={() => setForemanFilterOpen(false)}
+          colors={pickerColors}
+          isDark={isDark}
+        />
+        <SearchablePickerModal
+          visible={supervisorFilterOpen}
+          title="Filter by Supervisor"
+          searchPlaceholder="Search supervisors…"
+          allLabel="All Supervisors"
+          options={supervisorOptions}
+          selectedId={filterSupervisor?.id ?? null}
+          onSelect={setFilterSupervisor}
+          onClose={() => setSupervisorFilterOpen(false)}
+          colors={pickerColors}
+          isDark={isDark}
+        />
 
         {/* Filter Tabs */}
         <View style={styles.tabRow}>
@@ -397,9 +593,11 @@ export default function PhotoVerificationsScreen() {
               color={colors.emptyText}
             />
             <Text style={[styles.emptyText, { color: colors.emptyText }]}>
-              {filterTab === "ALL"
-                ? "No photos submitted in the last 7 days"
-                : `No ${filterTab.toLowerCase()} photos`}
+              {hasActiveFilters
+                ? "No photos match your filters"
+                : filterTab === "ALL"
+                  ? "No photos submitted in the last 7 days"
+                  : `No ${filterTab.toLowerCase()} photos`}
             </Text>
           </View>
         ) : (
@@ -476,7 +674,9 @@ export default function PhotoVerificationsScreen() {
                   <View style={styles.modalBadge}>
                     <Ionicons name="location" size={14} color="#fff" />
                     <Text style={styles.modalBadgeText}>
-                      {selectedPhoto.siteName}
+                      {selectedPhoto.siteCode
+                        ? `${selectedPhoto.siteCode} - ${selectedPhoto.siteName}`
+                        : selectedPhoto.siteName}
                     </Text>
                   </View>
                   <View style={styles.modalBadge}>
@@ -628,6 +828,38 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: "900" },
   subtitle: { fontSize: 14, marginTop: 4 },
 
+  searchWrap: { paddingHorizontal: 16, paddingBottom: 10 },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    height: 42,
+    borderRadius: 5,
+    borderWidth: 1,
+    gap: 8,
+  },
+  searchInput: { flex: 1, fontSize: 14 },
+
+  filterBar: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  filterTrigger: {
+    flexGrow: 1,
+    flexBasis: "30%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 10,
+    height: 38,
+    borderRadius: 5,
+    borderWidth: 1,
+  },
+  filterTriggerText: { flex: 1, fontSize: 12, fontWeight: "700" },
+
   tabRow: {
     flexDirection: "row",
     paddingHorizontal: 16,
@@ -662,18 +894,7 @@ const styles = StyleSheet.create({
   },
   photo: { width: "100%", height: IMAGE_HEIGHT },
   emptyCard: { width: CARD_WIDTH },
-  siteBadge: {
-    position: "absolute",
-    top: 8,
-    left: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-    maxWidth: CARD_WIDTH - 16,
-  },
+
   statusBadge: {
     position: "absolute",
     top: 8,
@@ -683,30 +904,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   statusBadgeText: { fontSize: 9, fontWeight: "800", letterSpacing: 0.5 },
-  foremanBadge: {
-    position: "absolute",
-    bottom: 8,
-    left: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-    maxWidth: CARD_WIDTH - 16,
-  },
-  timeBadge: {
-    position: "absolute",
-    bottom: 8,
-    right: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  badgeText: { fontSize: 11, fontWeight: "600", flexShrink: 1 },
+
+  cardInfo: { padding: 8, gap: 4 },
+  cardInfoRow: { flexDirection: "row", alignItems: "flex-start", gap: 5 },
+  cardInfoText: { fontSize: 11, fontWeight: "700", flex: 1, flexWrap: "wrap" },
+  cardInfoTextMuted: { fontSize: 11, fontWeight: "600", flex: 1 },
 
   errorWrap: {
     flex: 1,

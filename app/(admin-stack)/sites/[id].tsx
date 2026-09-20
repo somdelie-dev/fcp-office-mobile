@@ -1209,7 +1209,7 @@ export default function AdminSiteDetailScreen() {
       >
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <ScrollView
             contentContainerStyle={{ flexGrow: 1 }}
@@ -1356,7 +1356,7 @@ export default function AdminSiteDetailScreen() {
         animationType="slide"
         onRequestClose={() => !newOrderBusy && setNewOrderOpen(false)}
       >
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
           <View style={styles.drawerOverlay}>
             <Pressable
               style={styles.drawerBackdrop}

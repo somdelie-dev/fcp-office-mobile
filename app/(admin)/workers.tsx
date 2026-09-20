@@ -301,6 +301,7 @@ export default function AdminWorkersScreen() {
           type: "image/jpeg",
         } as any);
         fd.append("folder", "employees");
+        fd.append("name", `${fn} ${ln}`);
         const uploadRes = await apiFetch("/api/uploads/image", {
           method: "POST",
           body: fd,
@@ -922,7 +923,7 @@ export default function AdminWorkersScreen() {
       >
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <View style={createModalStyles.overlay}>
             <View

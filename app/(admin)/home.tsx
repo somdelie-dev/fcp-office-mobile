@@ -9,6 +9,7 @@ import {
   ClipboardList,
   DollarSign,
   QrCode,
+  LogOut,
   ArrowLeftRight,
   ScanFace,
   Shield,
@@ -321,7 +322,7 @@ export default function AdminHomeScreen() {
               </View>
               <View style={styles.quickActionText}>
                 <Text style={[styles.quickActionTitle, { color: textMain }]}>
-                  Scan Outs
+                  Scanouts Verifications
                 </Text>
                 <Text style={[styles.quickActionSub, { color: textSub }]}>
                   Review site photos
@@ -361,6 +362,42 @@ export default function AdminHomeScreen() {
                 </Text>
                 <Text style={[styles.quickActionSub, { color: textSub }]}>
                   View scan activity
+                </Text>
+              </View>
+              <ChevronRight size={18} color={textSub} />
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.quickActionBtn,
+                {
+                  backgroundColor: pressed
+                    ? isDark
+                      ? "rgba(244,63,94,0.25)"
+                      : "rgba(244,63,94,0.12)"
+                    : isDark
+                      ? "rgba(244,63,94,0.15)"
+                      : "rgba(244,63,94,0.08)",
+                },
+              ]}
+              onPress={() =>
+                router.push("/(admin-stack)/attendance-scans-out" as any)
+              }
+            >
+              <View
+                style={[
+                  styles.quickActionIcon,
+                  { backgroundColor: "rgba(244,63,94,0.2)" },
+                ]}
+              >
+                <LogOut size={20} color="#f43f5e" strokeWidth={2.2} />
+              </View>
+              <View style={styles.quickActionText}>
+                <Text style={[styles.quickActionTitle, { color: textMain }]}>
+                  Scans Out
+                </Text>
+                <Text style={[styles.quickActionSub, { color: textSub }]}>
+                  Search &amp; filter scan-outs
                 </Text>
               </View>
               <ChevronRight size={18} color={textSub} />

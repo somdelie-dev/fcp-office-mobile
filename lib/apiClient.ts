@@ -330,6 +330,7 @@ export type AdminSiteDayPhotoDto = {
   uploadedAtISO: string;
   siteName: string;
   siteId: string;
+  siteCode: string | null;
   foremanName: string;
   foremanId: string;
   supervisorName: string | null;
@@ -432,6 +433,55 @@ export async function apiAdminAttendanceScans(query?: {
   if (query?.q) params.set("q", query.q);
   const qs = params.toString();
   return apiFetch(`/api/app/admin/attendance-scans${qs ? `?${qs}` : ""}`);
+}
+
+export type AdminAttendanceScanOutDto = {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  employeeCode: string;
+  employeePhotoUrl: string | null;
+  siteId: string;
+  siteName: string;
+  siteCode: string | null;
+  foremanId: string;
+  foremanName: string;
+  scannedAtISO: string;
+  scannedOutAtISO: string;
+  methodBucket: "FACE" | "PHOTO_BULK" | "MANUAL";
+  verificationStatus: "VERIFIED" | "PENDING_REVIEW" | "REJECTED" | null;
+  confidence: number | null;
+  device: string | null;
+  /** The site-day photo used to bulk-witness this scan-out — only set for PHOTO_BULK. */
+  scanOutPhotoUrl: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  address: string | null;
+};
+
+/** List attendance scan-outs for admin (last 7 days, or one date) */
+export async function apiAdminAttendanceScansOut(query?: {
+  siteId?: string;
+  date?: string;
+  q?: string;
+}): Promise<{
+  scans: AdminAttendanceScanOutDto[];
+  sites: { id: string; name: string; code: string | null }[];
+  foremen: { id: string; name: string }[];
+  stats: {
+    total: number;
+    face: number;
+    photoBulk: number;
+    manual: number;
+    failedRejected: number;
+  };
+}> {
+  const params = new URLSearchParams();
+  if (query?.siteId) params.set("siteId", query.siteId);
+  if (query?.date) params.set("date", query.date);
+  if (query?.q) params.set("q", query.q);
+  const qs = params.toString();
+  return apiFetch(`/api/app/admin/attendance-scans-out${qs ? `?${qs}` : ""}`);
 }
 
 // ADMIN: MANUAL ATTENDANCE SCANS

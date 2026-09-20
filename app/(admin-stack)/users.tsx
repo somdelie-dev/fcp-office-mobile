@@ -480,7 +480,7 @@ function CreateForemanModal({
       onRequestClose={handleClose}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={modalStyles.keyboardView}
       >
         <View style={modalStyles.overlay}>
