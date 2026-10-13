@@ -590,11 +590,12 @@ export default function SiteDayPhotoScreen() {
           return false;
         }
 
-        // Compress image before upload (max 1600px, 70% quality)
+        // Keeps photos well under the server's upload limit (~200-400 KB)
+        // while staying sharp enough to count people in a group photo.
         const compressed = await compressImage(file.uri, {
-          maxWidth: 1600,
-          maxHeight: 1600,
-          quality: 0.7,
+          maxWidth: 1280,
+          maxHeight: 1280,
+          quality: 0.6,
         });
 
         if (
@@ -764,9 +765,12 @@ export default function SiteDayPhotoScreen() {
       } catch (e: any) {
         console.error("Upload failed:", e);
         const friendly = getFriendlyNetworkError(e);
+        // HTTP errors (e.g. 413 too large) already carry a readable message
+        // from upload.ts; only fall back to the connection hint otherwise.
         Alert.alert(
           "Upload failed",
           friendly?.message ??
+            (e?.status ? e.message : null) ??
             "Upload failed. Check your internet connection and try again.",
         );
         return false;

@@ -61,7 +61,7 @@ export function getFriendlyHttpMessage(
     return "Something went wrong on the FCP server. Please try again. If it keeps happening, contact support.";
   }
   if (status === 413) {
-    return "That file is too large to upload.";
+    return "This photo is too large for the server to accept. Please retake it. If it keeps happening, contact the office.";
   }
   if (serverMessage && !/^\s*</.test(serverMessage)) return serverMessage;
   if (status === 401) return "Your session has expired. Please sign in again.";
