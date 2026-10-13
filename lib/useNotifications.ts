@@ -17,6 +17,8 @@ export function useNotifications(pollIntervalMs = 30 * 60_000) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  // Shown on the screen so a failed load isn't mistaken for "no notifications".
+  const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetch = useCallback(async () => {
@@ -24,8 +26,10 @@ export function useNotifications(pollIntervalMs = 30 * 60_000) {
       const data = await apiFetch("/api/app/notifications", { auth: true });
       setNotifications(data.notifications ?? []);
       setUnreadCount(data.unreadCount ?? 0);
-    } catch {
-      // network offline — keep stale state
+      setError(null);
+    } catch (e: any) {
+      // Keep the stale list, but surface why it couldn't refresh.
+      setError(e?.message ?? "Couldn't load notifications.");
     }
   }, []);
 
@@ -87,6 +91,7 @@ export function useNotifications(pollIntervalMs = 30 * 60_000) {
     notifications,
     unreadCount,
     loading,
+    error,
     refresh,
     markAllRead,
     markRead,

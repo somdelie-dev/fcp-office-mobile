@@ -1,8 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Pressable,
   StyleSheet,
+  Text,
   View,
   type ImageStyle,
 } from "react-native";
@@ -15,6 +17,10 @@ import Animated, {
 } from "react-native-reanimated";
 
 const AnimatedImage = Animated.createAnimatedComponent(Image);
+
+// Full-size site photos travel through the API server, so a slow link can
+// stall indefinitely; give up and offer a retry instead of spinning forever.
+const LOAD_TIMEOUT_MS = 30000;
 
 interface ZoomableImageProps {
   uri: string;
@@ -40,6 +46,16 @@ export function ZoomableImage({
   const [status, setStatus] = useState<"loading" | "loaded" | "error">(
     "loading",
   );
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    setStatus("loading");
+    const t = setTimeout(
+      () => setStatus((s) => (s === "loading" ? "error" : s)),
+      LOAD_TIMEOUT_MS,
+    );
+    return () => clearTimeout(t);
+  }, [uri, attempt]);
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -109,6 +125,7 @@ export function ZoomableImage({
     <View style={{ width, height, overflow: "hidden", borderRadius }}>
       <GestureDetector gesture={composed}>
         <AnimatedImage
+          key={`${uri}#${attempt}`}
           source={{ uri }}
           style={[
             { width, height, borderRadius, opacity: status === "loaded" ? 1 : 0 } as ImageStyle,
@@ -121,9 +138,20 @@ export function ZoomableImage({
       </GestureDetector>
 
       {status !== "loaded" && (
-        <View style={[StyleSheet.absoluteFill, styles.overlay]} pointerEvents="none">
+        <View
+          style={[StyleSheet.absoluteFill, styles.overlay]}
+          pointerEvents={status === "error" ? "auto" : "none"}
+        >
           {status === "error" ? (
-            <Ionicons name="image-outline" size={32} color="#94a3b8" />
+            <Pressable
+              onPress={() => setAttempt((a) => a + 1)}
+              style={styles.retry}
+            >
+              <Ionicons name="refresh" size={28} color="#fff" />
+              <Text style={styles.retryText}>
+                Couldn't load photo. Tap to retry.
+              </Text>
+            </Pressable>
           ) : (
             <ActivityIndicator size="large" color="#fff" />
           )}
@@ -138,5 +166,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.15)",
+  },
+  retry: {
+    alignItems: "center",
+    gap: 8,
+    padding: 16,
+  },
+  retryText: {
+    color: "#fff",
+    fontSize: 14,
+    textAlign: "center",
   },
 });

@@ -18,12 +18,17 @@ export type UpdateCheckResult =
   | { status: "optional"; release: UpdateReleaseInfo }
   | { status: "required"; release: UpdateReleaseInfo };
 
-const CACHE_KEY = "update_check_v1";
+// v1 cached the computed status, which survives an app update: the freshly
+// installed build re-read "optional"/"required" worked out for the old
+// versionCode and kept showing the modal. v2 caches the release itself and
+// re-compares it against the installed versionCode on every read.
+const CACHE_KEY = "update_check_v2";
+const LEGACY_CACHE_KEY = "update_check_v1";
 const CHECK_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours — avoid hitting the server on every app open
 
 type CachedCheck = {
   checkedAt: number;
-  result: UpdateCheckResult;
+  release: UpdateReleaseInfo | null;
 };
 
 /** Android's versionCode, as a number. Null on iOS/web or if unreadable. */
@@ -43,10 +48,11 @@ async function readCache(): Promise<CachedCheck | null> {
   }
 }
 
-async function writeCache(result: UpdateCheckResult) {
+async function writeCache(release: UpdateReleaseInfo | null) {
   try {
-    const entry: CachedCheck = { checkedAt: Date.now(), result };
+    const entry: CachedCheck = { checkedAt: Date.now(), release };
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(entry));
+    await AsyncStorage.removeItem(LEGACY_CACHE_KEY);
   } catch {
     // Non-fatal — worst case we just re-check next launch.
   }
@@ -89,14 +95,16 @@ export async function checkForUpdate(
 
   const cached = await readCache();
   const isFresh = !!cached && Date.now() - cached.checkedAt < CHECK_TTL_MS;
+  const cachedResult: UpdateCheckResult = cached?.release
+    ? compare(installedVersionCode, cached.release)
+    : { status: "none" };
 
   if (!options.force && isFresh) {
-    return cached!.result;
+    return cachedResult;
   }
 
   if (!isCurrentlyOnline()) {
-    if (cached?.result.status === "required") return cached.result;
-    return { status: "none" };
+    return cachedResult.status === "required" ? cachedResult : { status: "none" };
   }
 
   try {
@@ -104,17 +112,10 @@ export async function checkForUpdate(
       auth: true,
     });
 
-    if (!data?.release) {
-      const result: UpdateCheckResult = { status: "none" };
-      await writeCache(result);
-      return result;
-    }
-
-    const result = compare(installedVersionCode, data.release as UpdateReleaseInfo);
-    await writeCache(result);
-    return result;
+    const release = (data?.release as UpdateReleaseInfo | undefined) ?? null;
+    await writeCache(release);
+    return release ? compare(installedVersionCode, release) : { status: "none" };
   } catch {
-    if (cached?.result.status === "required") return cached.result;
-    return { status: "none" };
+    return cachedResult.status === "required" ? cachedResult : { status: "none" };
   }
 }

@@ -9,7 +9,11 @@
  */
 
 import { AppState } from "react-native";
-import { apiFetch, clearToken } from "../api";
+import { File, Paths } from "expo-file-system";
+import { apiFetch, clearToken, getApiBase, getToken } from "../api";
+import { apiEnsureSiteDay, apiScanOutAll } from "../apiClient";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { uploadWithProgress } from "../upload";
 import {
   isCurrentlyOnline,
   onNetworkStatusChange,
@@ -175,6 +179,8 @@ async function executeQueueItem(item: QueueItem): Promise<{
         return await executeDayNote(item);
       case "day-ready":
         return await executeDayReady(item);
+      case "photo-scan-out":
+        return await executePhotoScanOut(item);
       default:
         return { success: false, error: `Unknown item type: ${item.type}` };
     }
@@ -184,6 +190,61 @@ async function executeQueueItem(item: QueueItem): Promise<{
       error: e?.message || "Unknown error",
       retryable: true,
     };
+  }
+}
+
+async function executePhotoScanOut(item: QueueItem): Promise<any> {
+  const { siteId, dateISO, photoUri, requestId, latitude, longitude, address } = item.payload;
+  try {
+    const token = await getToken();
+    if (!token) {
+      return { success: false, error: "Please sign in again to sync this photo scan-out.", retryable: false, stopSync: true };
+    }
+    const siteDayId = item.payload.siteDayId ??
+      (await apiEnsureSiteDay(siteId, dateISO)).siteDayId;
+    const actingForemanId = item.payload.actingForemanId ??
+      await AsyncStorage.getItem("acting_foreman_id");
+    const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+    if (actingForemanId) headers["x-acting-foreman-id"] = actingForemanId;
+    const uploadUrl = `${getApiBase()}/api/app/foreman/site-days/${encodeURIComponent(siteDayId)}/photos`;
+    let photoId = item.payload.photoId;
+    if (!photoId) {
+      const uploaded = await uploadWithProgress(
+        uploadUrl,
+        { uri: photoUri, name: `site-day-${dateISO}.jpg`, type: "image/jpeg" },
+        {
+          ...(item.payload.uploadId ? { clientUploadId: item.payload.uploadId } : {}),
+          ...(requestId ? { requestId } : {}),
+          ...(latitude != null ? { latitude: String(latitude) } : {}),
+          ...(longitude != null ? { longitude: String(longitude) } : {}),
+          ...(address ? { address } : {}),
+        },
+        headers,
+      );
+      photoId = uploaded?.photo?.id;
+      if (!photoId) throw new Error("The uploaded photo response did not include its record ID.");
+      const { updateQueueItem } = await import("./storage");
+      await updateQueueItem(item.id, {
+        payload: { ...item.payload, siteDayId, photoId },
+      });
+    }
+    await apiScanOutAll({
+      siteDayId,
+      photoId,
+      latitude,
+      longitude,
+      address,
+    });
+    try { new File(photoUri).delete(); } catch { /* Queue completion must not fail on local cleanup. */ }
+    return { success: true };
+  } catch (e: any) {
+    const error = e?.message || "Unable to sync the photo scan-out.";
+    const status: number | undefined = e?.status;
+    if (status === 401) {
+      await clearToken();
+      return { success: false, error: "Please sign in again to sync this photo scan-out.", retryable: false, stopSync: true };
+    }
+    return { success: false, error, retryable: !(status === 400 || status === 403 || status === 404 || status === 413) };
   }
 }
 

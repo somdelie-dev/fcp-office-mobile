@@ -15,7 +15,8 @@ export type QueueItemType =
   | "scan-bulk"
   | "delete-scan"
   | "day-note"
-  | "day-ready";
+  | "day-ready"
+  | "photo-scan-out";
 
 export type QueueItemStatus =
   | "pending" // Waiting to sync
@@ -171,7 +172,7 @@ export async function getNextQueueItem(): Promise<QueueItem | null> {
      LEFT JOIN queue dep ON q.dependsOn = dep.id
      WHERE q.status IN ('pending', 'failed')
        AND (q.dependsOn IS NULL OR dep.status = 'done')
-     ORDER BY q.createdAt ASC
+     ORDER BY CASE q.status WHEN 'pending' THEN 0 ELSE 1 END, q.createdAt ASC
      LIMIT 1`,
   );
 

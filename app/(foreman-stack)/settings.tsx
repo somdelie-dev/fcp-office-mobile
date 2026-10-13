@@ -15,11 +15,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { GlassCard } from "@/components/GlassCard";
-import { downloadAndLaunchInstaller } from "@/lib/appInstaller";
 import { useAuth } from "@/lib/auth";
 import { cacheClearAll } from "@/lib/mobileCache";
 import { useTheme } from "@/lib/themeContext";
-import { checkForUpdate } from "@/lib/updateCheck";
+import { checkForUpdate, type UpdateReleaseInfo } from "@/lib/updateCheck";
+import { OptionalUpdateModal } from "@/components/UpdateGate";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -73,6 +73,9 @@ export default function SettingsScreen() {
   const appVersion = Application.nativeApplicationVersion ?? "1.0.0";
   const buildNumber = Application.nativeBuildVersion ?? "1";
 
+  const [availableRelease, setAvailableRelease] =
+    useState<UpdateReleaseInfo | null>(null);
+
   const handleCheckForUpdate = async () => {
     if (Platform.OS !== "android") {
       Alert.alert("Not Available", "Updates are only distributed for Android.");
@@ -85,30 +88,8 @@ export default function SettingsScreen() {
         Alert.alert("Up to Date", "You're running the latest version of FirstClass.");
         return;
       }
-      Alert.alert(
-        "Update Available",
-        `Version ${result.release.version} is available.${
-          result.release.releaseNotes.length
-            ? `\n\n${result.release.releaseNotes.map((n) => `• ${n}`).join("\n")}`
-            : ""
-        }`,
-        [
-          { text: "Later", style: "cancel" },
-          {
-            text: "Update Now",
-            onPress: async () => {
-              try {
-                await downloadAndLaunchInstaller();
-              } catch (e: any) {
-                Alert.alert(
-                  "Update Failed",
-                  e?.message ?? "Couldn't download the update. Please try again.",
-                );
-              }
-            },
-          },
-        ],
-      );
+      // Same modal as the launch-time prompt, so the download shows progress.
+      setAvailableRelease(result.release);
     } catch {
       Alert.alert("Check Failed", "Couldn't reach the update server. Try again later.");
     } finally {
@@ -310,6 +291,13 @@ export default function SettingsScreen() {
           </SettingRow>
         </Pressable>
       </GlassCard>
+
+      {availableRelease && (
+        <OptionalUpdateModal
+          release={availableRelease}
+          onDismiss={() => setAvailableRelease(null)}
+        />
+      )}
     </ScrollView>
   );
 }

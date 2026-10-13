@@ -14,7 +14,8 @@
         "buildType": "apk"
       },
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "image": "macos-tahoe-26.5-xcode-26.6"
       }
     },
   "production": {
@@ -25,7 +26,7 @@
   },
   "ios": {
     "distribution": "store",
-    "image": "macos-sequoia-15.6-xcode-26.2"
+    "image": "macos-tahoe-26.5-xcode-26.6"
   }
 }
   },

@@ -11,6 +11,7 @@ import DownloadTimesheetsModal from "@/components/DownloadTimesheetsModal";
 
 import {
   apiMeCached,
+  apiSupervisorOvertimeRequests,
   apiSupervisorTimesheetsCached,
   type TimesheetListRowDto,
 } from "../../lib/apiClient";
@@ -104,6 +105,7 @@ export default function SupervisorHome() {
   const [error, setError] = useState<string | null>(null);
 
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
+  const [pendingOvertime, setPendingOvertime] = useState(0);
   // Supervisor stats: counts of timesheets by approval status
   const [overview, setOverview] = useState<OverviewData>(
     supervisorOverview?.data || {
@@ -190,6 +192,14 @@ export default function SupervisorHome() {
   useFocusEffect(
     useCallback(() => {
       loadData();
+      apiSupervisorOvertimeRequests()
+        .then((res) =>
+          setPendingOvertime(
+            (res.requests ?? []).filter((r) => r.status === "PENDING").length,
+          ),
+        )
+        // The badge is a convenience; the Overtime screen shows real errors.
+        .catch(() => setPendingOvertime(0));
     }, [loadData]),
   );
 
@@ -335,6 +345,13 @@ export default function SupervisorHome() {
               onPress={() => router.push("/(supervisor-stack)/foremen")}
               theme={colors}
             /> */}
+            <ActionButton
+              icon="time"
+              label="Overtime Approvals"
+              badge={pendingOvertime > 0 ? pendingOvertime : undefined}
+              onPress={() => router.push("/(supervisor-stack)/overtime")}
+              theme={colors}
+            />
             <ActionButton
               icon="images"
               label="Scan outs"

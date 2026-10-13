@@ -1184,17 +1184,84 @@ export async function apiScanOutAll(input: {
   latitude?: number | null;
   longitude?: number | null;
   address?: string | null;
+  /** Only these workers; omitted = everyone still scanned in. */
+  employeeIds?: string[];
+  /** Creates a pending overtime request for `employeeIds`. */
+  overtime?: boolean;
 }): Promise<{
   ok: boolean;
   scannedOutCount: number;
   scannedOutAt?: string;
   message: string;
+  overtimeRequest?: {
+    id: string;
+    hours: number;
+    startsAtISO: string;
+    endsAtISO: string;
+  };
 }> {
   return apiFetch("/api/app/attendance/scan-out-all", {
     method: "POST",
     body: JSON.stringify(input),
     auth: true,
   }) as any;
+}
+
+export type ScannedInWorkerDto = {
+  employeeId: string;
+  name: string;
+  code: string;
+  scannedInAtISO: string;
+};
+
+/** FOREMAN: workers on a site day who have not been scanned out yet. */
+export async function apiForemanScannedInWorkers(
+  siteDayId: string,
+): Promise<{ workers: ScannedInWorkerDto[] }> {
+  return apiFetch(
+    `/api/app/foreman/site-days/${encodeURIComponent(siteDayId)}/scanned-in`,
+    { auth: true },
+  );
+}
+
+export type OvertimeRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export type OvertimeRequestDto = {
+  id: string;
+  status: OvertimeRequestStatus;
+  workDateISO: string;
+  startsAtISO: string;
+  endsAtISO: string;
+  hours: number;
+  createdAtISO: string;
+  reviewedAtISO: string | null;
+  reviewNote: string | null;
+  reviewedByName: string | null;
+  site: { id: string; code: string | null; name: string };
+  foreman: { id: string; name: string };
+  photoUrl: string | null;
+  employees: { id: string; name: string; code: string }[];
+};
+
+/** SUPERVISOR: pending overtime for assigned sites plus recent decisions. */
+export async function apiSupervisorOvertimeRequests(): Promise<{
+  requests: OvertimeRequestDto[];
+}> {
+  return apiFetch("/api/app/supervisor/overtime-requests", { auth: true });
+}
+
+export async function apiSupervisorApproveOvertime(id: string) {
+  return apiFetch(
+    `/api/app/supervisor/overtime-requests/${encodeURIComponent(id)}/approve`,
+    { method: "POST", body: JSON.stringify({}), auth: true },
+  );
+}
+
+export async function apiSupervisorRejectOvertime(id: string, note: string) {
+  return apiFetch(
+    `/api/app/supervisor/overtime-requests/${encodeURIComponent(id)}/reject`,
+    { method: "POST", body: JSON.stringify({ note }), auth: true },
+  );
 }
 
 /**
@@ -1273,6 +1340,11 @@ export type ForemanScanOutDto = {
   id: string;
   employeeName: string;
   faceImageUrl: string | null;
+  /** Site-day photo used as scan-out proof; shared by everyone in it. */
+  photoId?: string | null;
+  photoVerificationStatus?: string | null;
+  /** Signed URL of the site-day photo used as scan-out proof, if any. */
+  photoUrl?: string | null;
   siteId: string;
   siteName: string;
   scannedOutAtISO: string;

@@ -12,6 +12,7 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  SectionList,
   StyleSheet,
   Text,
   TextInput,
@@ -236,40 +237,6 @@ function PhotoCard({
   );
 }
 
-function PhotoGrid({
-  photos,
-  colors,
-  onPhotoPress,
-}: {
-  photos: SupervisorSiteDayPhotoDto[];
-  colors: (typeof themes)["light"];
-  onPhotoPress: (photo: SupervisorSiteDayPhotoDto) => void;
-}) {
-  const rows: SupervisorSiteDayPhotoDto[][] = [];
-  for (let i = 0; i < photos.length; i += NUM_COLUMNS) {
-    rows.push(photos.slice(i, i + NUM_COLUMNS));
-  }
-
-  return (
-    <View style={styles.grid}>
-      {rows.map((row, rowIdx) => (
-        <View key={rowIdx} style={styles.gridRow}>
-          {row.map((photo) => (
-            <PhotoCard
-              key={photo.id}
-              item={photo}
-              colors={colors}
-              onPress={() => onPhotoPress(photo)}
-            />
-          ))}
-          {/* Fill empty space if odd number */}
-          {row.length < NUM_COLUMNS && <View style={styles.emptyCard} />}
-        </View>
-      ))}
-    </View>
-  );
-}
-
 export default function SupervisorScanOutsScreen() {
   const { theme } = useTheme();
   const colors = themes[theme];
@@ -299,8 +266,15 @@ export default function SupervisorScanOutsScreen() {
     return photos.filter((photo) => getSearchText(photo).includes(query));
   }, [photos, search]);
 
-  const groupedPhotos = useMemo(
-    () => groupPhotosByDate(visiblePhotos),
+  const photoSections = useMemo(
+    () =>
+      groupPhotosByDate(visiblePhotos).map((group) => {
+        const rows: SupervisorSiteDayPhotoDto[][] = [];
+        for (let i = 0; i < group.photos.length; i += NUM_COLUMNS) {
+          rows.push(group.photos.slice(i, i + NUM_COLUMNS));
+        }
+        return { title: group.heading, data: rows };
+      }),
     [visiblePhotos],
   );
 
@@ -496,7 +470,7 @@ export default function SupervisorScanOutsScreen() {
                   <Text style={styles.retryText}>Retry</Text>
                 </Pressable>
               </View>
-            ) : groupedPhotos.length === 0 ? (
+            ) : photoSections.length === 0 ? (
               <View style={styles.emptyWrap}>
                 <Ionicons
                   name="images-outline"
@@ -510,29 +484,45 @@ export default function SupervisorScanOutsScreen() {
                 </Text>
               </View>
             ) : (
-              <ScrollView
+              // SectionList only mounts rows near the viewport; a plain
+              // ScrollView started every full-size photo download at once.
+              <SectionList
                 style={styles.scrollView}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
                   <RefreshControl refreshing={refreshing} onRefresh={refresh} />
                 }
-              >
-                {groupedPhotos.map((group) => (
-                  <View key={group.dateKey} style={styles.dateSection}>
-                    <Text
-                      style={[styles.dateHeading, { color: colors.textPrimary }]}
-                    >
-                      {group.heading}
-                    </Text>
-                    <PhotoGrid
-                      photos={group.photos}
-                      colors={colors}
-                      onPhotoPress={setSelectedPhoto}
-                    />
+                sections={photoSections}
+                keyExtractor={(row) => row.map((p) => p.id).join("|")}
+                stickySectionHeadersEnabled={false}
+                initialNumToRender={4}
+                maxToRenderPerBatch={4}
+                windowSize={5}
+                renderSectionHeader={({ section }) => (
+                  <Text
+                    style={[styles.dateHeading, { color: colors.textPrimary }]}
+                  >
+                    {section.title}
+                  </Text>
+                )}
+                renderSectionFooter={() => <View style={styles.dateSection} />}
+                renderItem={({ item: row }) => (
+                  <View style={styles.gridRow}>
+                    {row.map((photo) => (
+                      <PhotoCard
+                        key={photo.id}
+                        item={photo}
+                        colors={colors}
+                        onPress={() => setSelectedPhoto(photo)}
+                      />
+                    ))}
+                    {row.length < NUM_COLUMNS && (
+                      <View style={styles.emptyCard} />
+                    )}
                   </View>
-                ))}
-              </ScrollView>
+                )}
+              />
             )}
 
             {/* Full Image Modal */}
@@ -732,15 +722,12 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   dateSection: {
-    marginBottom: 24,
+    height: 24,
   },
   dateHeading: {
     fontSize: 18,
     fontWeight: "700",
     marginBottom: 12,
-  },
-  grid: {
-    gap: GRID_GAP,
   },
   gridRow: {
     flexDirection: "row",

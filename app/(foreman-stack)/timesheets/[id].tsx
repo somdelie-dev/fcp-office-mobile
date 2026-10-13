@@ -6,7 +6,7 @@ import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { useFocusEffect } from "expo-router";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -189,9 +189,10 @@ export default function ForemanTimesheetDetail() {
   }
 
   const router = useRouter();
-  const { id, siteId } = useLocalSearchParams<{
+  const { id, siteId, fresh } = useLocalSearchParams<{
     id: string;
     siteId?: string;
+    fresh?: string;
   }>();
   const { user } = useAuth();
 
@@ -207,17 +208,23 @@ export default function ForemanTimesheetDetail() {
   const [pdfFilename, setPdfFilename] = useState<string | null>(null);
   const [sharingPdf, setSharingPdf] = useState(false);
 
+  // Set when arriving straight from a scan-in submit, so the first load
+  // skips the cached copy that predates the new scans.
+  const bypassCacheOnce = useRef(fresh === "1");
+
   const refresh = useCallback(
     async (force = false) => {
       if (!timesheetId) return;
       if (force) setRefreshing(true);
       else setLoading(true);
       setError(null);
+      const bypassCache = force || bypassCacheOnce.current;
+      bypassCacheOnce.current = false;
       try {
         const res = await apiForemanTimesheetDetailMobileCached(
           timesheetId,
           siteFilterId,
-          force,
+          bypassCache,
         );
         const ts = pickTimesheet(res);
         if (!ts) {

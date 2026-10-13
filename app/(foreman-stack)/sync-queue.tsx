@@ -178,7 +178,11 @@ export default function SyncQueueScreen() {
                 <GlassCard style={[styles.card, styles.queueItemCard] as any}>
                   <View style={styles.queueItemHeader}>
                     <View style={styles.queueItemTypeAndStatus}>
-                      <Text style={styles.queueItemType}>{item.type}</Text>
+                      <Text style={styles.queueItemType}>
+                        {item.type === "photo-scan-out"
+                          ? "Site photo and scan-out"
+                          : item.type}
+                      </Text>
                       <View
                         style={[
                           styles.statusBadge,
@@ -219,10 +223,20 @@ export default function SyncQueueScreen() {
 
                   {item.payload && (
                     <View style={styles.payloadSection}>
-                      <Text style={styles.payloadLabel}>Payload:</Text>
-                      <Text style={styles.payloadText}>
-                        {JSON.stringify(item.payload, null, 2)}
-                      </Text>
+                      {item.type === "photo-scan-out" ? (
+                        <Text style={styles.payloadText}>
+                          Site: {item.payload.siteId}{"\n"}
+                          Date: {item.payload.dateISO}{"\n"}
+                          The photo stays on this phone until the upload succeeds.
+                        </Text>
+                      ) : (
+                        <>
+                          <Text style={styles.payloadLabel}>Payload:</Text>
+                          <Text style={styles.payloadText}>
+                            {JSON.stringify(item.payload, null, 2)}
+                          </Text>
+                        </>
+                      )}
                     </View>
                   )}
                 </GlassCard>

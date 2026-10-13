@@ -35,6 +35,29 @@ export interface SyncResult {
   message?: string;
 }
 
+/** Queue an end-of-day photo and its dependent bulk scan-out as one action. */
+export async function enqueuePhotoScanOut(input: {
+  siteId: string;
+  dateISO: string;
+  photoUri: string;
+  uploadId?: string;
+  actingForemanId?: string | null;
+  requestId?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  address?: string | null;
+}): Promise<string> {
+  return enqueueItem({
+    type: "photo-scan-out",
+    payload: input,
+    createdAt: new Date().toISOString(),
+    attemptCount: 0,
+    lastError: null,
+    status: "pending",
+    dependsOn: null,
+  });
+}
+
 /**
  * Enqueue a single attendance scan
  */

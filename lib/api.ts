@@ -2,6 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import { isCurrentlyOnline } from "./offline/networkStatus";
+import {
+  getFriendlyHttpMessage,
+  getFriendlyNetworkError,
+  isRetryableNetworkError,
+} from "./apiErrors";
 
 // https://fcp.cautious-tech.com/
 
@@ -24,6 +29,10 @@ function getDevLanHost(): string | null {
 
 export function getApiBase() {
   if (__DEV__) {
+    // Set when the LAN is unreachable (e.g. an endpoint firewall) and the
+    // local backend is exposed through a tunnel instead.
+    const override = process.env.EXPO_PUBLIC_API_BASE?.trim();
+    if (override) return override.replace(/\/+$/, "");
     const host = getDevLanHost();
     if (host) return `http://${host}:${DEV_API_PORT}`;
     // Web dev server (no Metro hostUri) talks to itself on localhost.
@@ -186,7 +195,10 @@ async function fetchDirect(
           json?.error ||
           json?.message ||
           (text && text.length < 200 ? text : null);
-        const msg = msgBody ?? `Request failed (${res.status})`;
+        if (res.status >= 500) {
+          console.warn(`[api] ${res.status} ${path}:`, msgBody);
+        }
+        const msg = getFriendlyHttpMessage(res.status, msgBody);
 
         // Throw an Error but attach useful metadata (status, path, response body)
         const err: any = new Error(msg);
@@ -200,18 +212,14 @@ async function fetchDirect(
         throw err;
       }
 
+      clearTimeout(t);
       return json;
     } catch (e: any) {
       lastError = e;
       // If aborted (timeout) or a network failure, prepare to retry
-      const isTimeout =
-        e?.name === "AbortError" ||
-        String(e?.message).includes("timed out") ||
-        String(e?.message).includes("Network request failed");
       // Do not retry on 4xx/5xx errors (bad auth, forbidden, validation, server errors) -
       // those are thrown as plain Error objects from the res.ok check above, not TypeErrors.
-      const shouldRetry =
-        isTimeout || e?.message === "Failed to fetch" || e instanceof TypeError;
+      const shouldRetry = isRetryableNetworkError(e);
 
       clearTimeout(t);
 
@@ -222,8 +230,7 @@ async function fetchDirect(
         continue; // retry loop
       }
 
-      if (e?.name === "AbortError") throw new Error("Request timed out.");
-      throw e;
+      throw getFriendlyNetworkError(e) ?? e;
     }
   }
 

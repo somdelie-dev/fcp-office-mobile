@@ -10,6 +10,7 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  SectionList,
   StyleSheet,
   Text,
   TextInput,
@@ -398,6 +399,18 @@ export default function PhotoVerificationsScreen() {
       .map(([, v]) => v);
   }, [filteredPhotos]);
 
+  const sections = useMemo(
+    () =>
+      grouped.map((group) => {
+        const rows: AdminSiteDayPhotoDto[][] = [];
+        for (let i = 0; i < group.photos.length; i += NUM_COLUMNS) {
+          rows.push(group.photos.slice(i, i + NUM_COLUMNS));
+        }
+        return { title: group.heading, data: rows };
+      }),
+    [grouped],
+  );
+
   return (
     <AuthStyleBackground>
       <View style={styles.container}>
@@ -601,51 +614,45 @@ export default function PhotoVerificationsScreen() {
             </Text>
           </View>
         ) : (
-          <ScrollView
+          // SectionList only mounts rows near the viewport; a plain
+          // ScrollView started every full-size photo download at once.
+          <SectionList
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={refresh} />
             }
-          >
-            {grouped.map((group) => (
-              <View key={group.heading} style={styles.dateSection}>
-                <Text
-                  style={[styles.dateHeading, { color: colors.textPrimary }]}
-                >
-                  {group.heading}
-                </Text>
-                <View style={styles.grid}>
-                  {(() => {
-                    const rows: AdminSiteDayPhotoDto[][] = [];
-                    for (let i = 0; i < group.photos.length; i += NUM_COLUMNS) {
-                      rows.push(group.photos.slice(i, i + NUM_COLUMNS));
-                    }
-                    return rows.map((row, ri) => (
-                      <View key={ri} style={styles.gridRow}>
-                        {row.map((photo) => (
-                          <PhotoCard
-                            key={photo.id}
-                            item={photo}
-                            colors={colors}
-                            onPress={() => {
-                              setSelectedPhoto(photo);
-                              setShowRejectInput(false);
-                              setRejectNotes("");
-                            }}
-                          />
-                        ))}
-                        {row.length < NUM_COLUMNS && (
-                          <View style={styles.emptyCard} />
-                        )}
-                      </View>
-                    ));
-                  })()}
-                </View>
+            sections={sections}
+            keyExtractor={(row) => row.map((p) => p.id).join("|")}
+            stickySectionHeadersEnabled={false}
+            initialNumToRender={4}
+            maxToRenderPerBatch={4}
+            windowSize={5}
+            renderSectionHeader={({ section }) => (
+              <Text style={[styles.dateHeading, { color: colors.textPrimary }]}>
+                {section.title}
+              </Text>
+            )}
+            renderSectionFooter={() => <View style={styles.dateSection} />}
+            renderItem={({ item: row }) => (
+              <View style={[styles.gridRow, { marginBottom: GRID_GAP * 2 }]}>
+                {row.map((photo) => (
+                  <PhotoCard
+                    key={photo.id}
+                    item={photo}
+                    colors={colors}
+                    onPress={() => {
+                      setSelectedPhoto(photo);
+                      setShowRejectInput(false);
+                      setRejectNotes("");
+                    }}
+                  />
+                ))}
+                {row.length < NUM_COLUMNS && <View style={styles.emptyCard} />}
               </View>
-            ))}
-          </ScrollView>
+            )}
+          />
         )}
 
         {/* Photo Detail / Verify Modal */}
@@ -878,9 +885,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: GRID_PADDING,
     paddingBottom: 32,
   },
-  dateSection: { marginBottom: 24 },
+  dateSection: { height: 24 },
   dateHeading: { fontSize: 18, fontWeight: "700", marginBottom: 12 },
-  grid: { gap: GRID_GAP },
   gridRow: {
     flexDirection: "row",
     gap: GRID_GAP,

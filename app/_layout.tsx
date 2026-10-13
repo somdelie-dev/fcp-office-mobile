@@ -73,6 +73,21 @@ function NotificationNavigator() {
         router.push("/(foreman)/timesheets");
       }
 
+      if (data.type === "ADMIN_MESSAGE") {
+        router.push("/(foreman-stack)/notifications");
+      }
+
+      if (data.type === "OVERTIME_REQUESTED") {
+        router.push("/(supervisor-stack)/overtime");
+      }
+
+      if (
+        data.type === "OVERTIME_APPROVED" ||
+        data.type === "OVERTIME_REJECTED"
+      ) {
+        router.push("/(foreman-stack)/notifications");
+      }
+
       // Handle site day photo reminder notification tap (scheduled at midnight)
       if (data.type === "site-day-photo-reminder") {
         router.push({

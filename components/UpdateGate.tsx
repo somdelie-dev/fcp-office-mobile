@@ -14,7 +14,10 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "../lib/auth";
 import { useTheme } from "../lib/themeContext";
-import { downloadAndLaunchInstaller } from "../lib/appInstaller";
+import {
+  downloadAndLaunchInstaller,
+  type InstallerProgress,
+} from "../lib/appInstaller";
 import {
   checkForUpdate,
   type UpdateCheckResult,
@@ -62,13 +65,19 @@ function ReleaseNotesList({
   );
 }
 
+function formatMb(bytes: number) {
+  return (bytes / (1024 * 1024)).toFixed(1);
+}
+
 function useInstallAction() {
   const [installing, setInstalling] = useState(false);
+  const [progress, setProgress] = useState<InstallerProgress | null>(null);
 
   const install = async () => {
     setInstalling(true);
+    setProgress({ bytesWritten: 0, totalBytes: -1 });
     try {
-      await downloadAndLaunchInstaller();
+      await downloadAndLaunchInstaller(setProgress);
     } catch (e: any) {
       Alert.alert(
         "Update Failed",
@@ -76,16 +85,62 @@ function useInstallAction() {
       );
     } finally {
       setInstalling(false);
+      setProgress(null);
     }
   };
 
-  return { installing, install };
+  return { installing, install, progress };
+}
+
+/** Download progress shown in place of a bare spinner; the APK is ~140 MB. */
+function DownloadProgress({
+  progress,
+  accent,
+  track,
+  muted,
+}: {
+  progress: InstallerProgress;
+  accent: string;
+  track: string;
+  muted: string;
+}) {
+  const known = progress.totalBytes > 0;
+  const fraction = known
+    ? Math.min(1, progress.bytesWritten / progress.totalBytes)
+    : 0;
+  const done = known && fraction >= 1;
+  const label = done
+    ? "Download complete. Opening installer…"
+    : known
+      ? `Downloading… ${Math.round(fraction * 100)}% (${formatMb(progress.bytesWritten)} of ${formatMb(progress.totalBytes)} MB)`
+      : `Downloading… ${formatMb(progress.bytesWritten)} MB`;
+
+  return (
+    <View style={styles.progressWrap}>
+      <View style={[styles.progressTrack, { backgroundColor: track }]}>
+        {known ? (
+          <View
+            style={[
+              styles.progressFill,
+              { backgroundColor: accent, width: `${fraction * 100}%` },
+            ]}
+          />
+        ) : (
+          <ActivityIndicator color={accent} size="small" />
+        )}
+      </View>
+      <Text style={[styles.progressText, { color: muted }]}>{label}</Text>
+      <Text style={[styles.progressHint, { color: muted }]}>
+        Keep the app open until the installer appears.
+      </Text>
+    </View>
+  );
 }
 
 function RequiredUpdateModal({ release }: { release: UpdateReleaseInfo }) {
   const { theme } = useTheme();
   const c = colors[theme === "dark" ? "dark" : "light"];
-  const { installing, install } = useInstallAction();
+  const { installing, install, progress } = useInstallAction();
 
   return (
     <Modal
@@ -111,24 +166,29 @@ function RequiredUpdateModal({ release }: { release: UpdateReleaseInfo }) {
           <ScrollView style={styles.notesScroll}>
             <ReleaseNotesList notes={release.releaseNotes} muted={c.textMuted} />
           </ScrollView>
-          <Pressable
-            style={[styles.primaryButton, { backgroundColor: c.accent }]}
-            onPress={install}
-            disabled={installing}
-          >
-            {installing ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
+          {installing && progress ? (
+            <DownloadProgress
+              progress={progress}
+              accent={c.accent}
+              track={c.border}
+              muted={c.textMuted}
+            />
+          ) : (
+            <Pressable
+              style={[styles.primaryButton, { backgroundColor: c.accent }]}
+              onPress={install}
+              disabled={installing}
+            >
               <Text style={styles.primaryButtonText}>Update Now</Text>
-            )}
-          </Pressable>
+            </Pressable>
+          )}
         </View>
       </View>
     </Modal>
   );
 }
 
-function OptionalUpdateModal({
+export function OptionalUpdateModal({
   release,
   onDismiss,
 }: {
@@ -137,7 +197,7 @@ function OptionalUpdateModal({
 }) {
   const { theme } = useTheme();
   const c = colors[theme === "dark" ? "dark" : "light"];
-  const { installing, install } = useInstallAction();
+  const { installing, install, progress } = useInstallAction();
 
   return (
     <Modal
@@ -163,17 +223,22 @@ function OptionalUpdateModal({
           <ScrollView style={styles.notesScroll}>
             <ReleaseNotesList notes={release.releaseNotes} muted={c.textMuted} />
           </ScrollView>
-          <Pressable
-            style={[styles.primaryButton, { backgroundColor: c.accent }]}
-            onPress={install}
-            disabled={installing}
-          >
-            {installing ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
+          {installing && progress ? (
+            <DownloadProgress
+              progress={progress}
+              accent={c.accent}
+              track={c.border}
+              muted={c.textMuted}
+            />
+          ) : (
+            <Pressable
+              style={[styles.primaryButton, { backgroundColor: c.accent }]}
+              onPress={install}
+              disabled={installing}
+            >
               <Text style={styles.primaryButtonText}>Update Now</Text>
-            )}
-          </Pressable>
+            </Pressable>
+          )}
           <Pressable
             style={styles.secondaryButton}
             onPress={onDismiss}
@@ -288,6 +353,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     flex: 1,
     lineHeight: 18,
+  },
+  progressWrap: {
+    width: "100%",
+    gap: 6,
+  },
+  progressTrack: {
+    width: "100%",
+    height: 10,
+    borderRadius: 5,
+    overflow: "hidden",
+    justifyContent: "center",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 5,
+  },
+  progressText: {
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  progressHint: {
+    fontSize: 12,
+    textAlign: "center",
   },
   primaryButton: {
     width: "100%",

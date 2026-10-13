@@ -16,9 +16,12 @@ const THEME_STORAGE_KEY = "theme_preference_v1";
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Default must be light mode unless user explicitly saved a preference.
   const [theme, setThemeState] = useState<Theme>("light");
-  const [isLoading, setIsLoading] = useState(true);
 
-  // Load theme from storage on mount
+  // Load theme from storage on mount. Children always render inside the
+  // Provider below, even before this resolves — useTheme() must never see
+  // an undefined context, or a screen that mounts before AsyncStorage
+  // responds (e.g. the Login screen on a fresh install) crashes instead of
+  // just briefly showing the default theme.
   useEffect(() => {
     (async () => {
       try {
@@ -28,8 +31,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (e) {
         console.error("Failed to load theme", e);
-      } finally {
-        setIsLoading(false);
       }
     })();
   }, []);
@@ -45,11 +46,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const newTheme = theme === "dark" ? "light" : "dark";
     setTheme(newTheme);
   };
-
-  // Don't render until theme is loaded to avoid flash
-  if (isLoading) {
-    return <>{children}</>;
-  }
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>

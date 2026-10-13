@@ -28,9 +28,11 @@ import {
   apiAttendanceTodayCached,
   apiDeleteScan,
   apiForemanEmployees,
+  apiForemanTimesheetsCached,
   apiScanBulk,
   apiSitesCached,
   type AttendanceDayDto,
+  type TimesheetListRowDto,
   type AttendanceScanDto,
   type Site,
 } from "../../lib/apiClient";
@@ -388,6 +390,34 @@ export default function ForemanScan() {
     );
   }
 
+  // Timesheets are built from scans on the server, so the new scans are
+  // already counted; refetch past the cache and open this period's sheet.
+  async function openCurrentTimesheet(siteId: string) {
+    try {
+      const res = (await apiForemanTimesheetsCached(true)) as {
+        timesheets?: TimesheetListRowDto[];
+      };
+      const rows = res?.timesheets ?? [];
+      const current =
+        rows.find((r) => r.isCurrent && r.siteId === siteId) ??
+        rows.find((r) => r.isCurrent);
+      if (current) {
+        router.push({
+          pathname: "/(foreman-stack)/timesheets/[id]",
+          params: {
+            id: current.id,
+            ...(current.siteId ? { siteId: current.siteId } : {}),
+            fresh: "1",
+          },
+        });
+        return;
+      }
+    } catch (e) {
+      console.warn("Could not open current timesheet after submit:", e);
+    }
+    router.push("/(foreman)/timesheets");
+  }
+
   async function submitBatch() {
     if (!site) return;
     if (!batch.length) return;
@@ -424,6 +454,19 @@ export default function ForemanScan() {
       setBatchState([]);
       await clearBatch(site.id, dateISO);
 
+      // Offline, apiFetch queues the batch and returns local placeholders
+      // ({ scans }) instead of the server's { results }.
+      if (!Array.isArray(res?.results)) {
+        playOk();
+        Alert.alert(
+          "Saved on this phone",
+          `${batch.length} scan(s) will upload automatically when you're back online. Your timesheet will update after they sync.`,
+          [{ text: "OK", onPress: () => router.back() }],
+        );
+        setStatus("✅ Saved offline. Waiting to sync.");
+        return;
+      }
+
       // Your server returns { ok, siteDayId, results: [...] }
       const created = res.results.filter(
         (r: { status: string }) => r.status === "CREATED",
@@ -445,12 +488,11 @@ export default function ForemanScan() {
       if (inactive) parts.push(`Inactive: ${inactive}`);
 
       playOk();
+      const submittedSiteId = site.id;
       Alert.alert("Batch submitted", parts.join("\n"), [
         {
-          text: "OK",
-          // Site selection now lives on the home screen — send the
-          // foreman back there instead of re-opening a picker here.
-          onPress: () => router.back(),
+          text: "View timesheet",
+          onPress: () => openCurrentTimesheet(submittedSiteId),
         },
       ]);
       setStatus(`✅ Submitted. Saved ${created}.`);

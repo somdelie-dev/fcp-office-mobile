@@ -1,3 +1,9 @@
+import {
+  getFriendlyHttpMessage,
+  getFriendlyNetworkError,
+  isRetryableNetworkError,
+} from "./apiErrors";
+
 export type UploadProgressHandler = (percent: number) => void;
 
 const UPLOAD_TIMEOUT_MS = 60000;
@@ -33,9 +39,11 @@ function singleAttemptUpload(
       }
 
       xhr.upload.onprogress = (ev) => {
-        if (ev.lengthComputable && onProgress) {
+        if (ev.lengthComputable && ev.total > 0 && onProgress) {
+          // Android can report `total` as the file size while `loaded` counts
+          // the whole multipart body, which pushed the UI past 100%.
           const pct = Math.round((ev.loaded / ev.total) * 100);
-          onProgress(pct);
+          onProgress(Math.min(100, Math.max(0, pct)));
         }
       };
 
@@ -50,9 +58,26 @@ function singleAttemptUpload(
             } catch (e) {
               resolve(xhr.responseText);
             }
+          } else if (xhr.status === 0) {
+            // Connection dropped before any response; onerror/ontimeout
+            // report it, so don't reject twice with a misleading status.
+            return;
           } else {
-            const msg = xhr.responseText || `HTTP ${xhr.status}`;
-            reject(new Error(msg));
+            let serverMessage: string | null = null;
+            try {
+              const body = JSON.parse(xhr.responseText);
+              serverMessage = body?.error || body?.message || null;
+            } catch {
+              serverMessage = null;
+            }
+            if (xhr.status >= 500) {
+              console.warn(`[upload] ${xhr.status}:`, xhr.responseText?.slice(0, 300));
+            }
+            const err: any = new Error(
+              getFriendlyHttpMessage(xhr.status, serverMessage),
+            );
+            err.status = xhr.status;
+            reject(err);
           }
         }
       };
@@ -77,16 +102,6 @@ function singleAttemptUpload(
  * Returns true if this error is a transient network failure worth retrying
  * (timeout or connectivity drop), as opposed to a completed HTTP error response.
  */
-function isRetryableUploadError(e: any): boolean {
-  const msg = String(e?.message ?? "");
-  return (
-    msg.includes("timed out") ||
-    msg === "Network request failed" ||
-    msg === "Failed to fetch" ||
-    e instanceof TypeError
-  );
-}
-
 export async function uploadWithProgress(
   url: string,
   file: { uri: string; name: string; type: string },
@@ -110,14 +125,14 @@ export async function uploadWithProgress(
     } catch (e: any) {
       lastError = e;
 
-      if (attempt < MAX_ATTEMPTS && isRetryableUploadError(e)) {
+      if (attempt < MAX_ATTEMPTS && isRetryableNetworkError(e)) {
         // Exponential backoff: 500ms, 1000ms, 2000ms
         const backoff = 500 * Math.pow(2, attempt - 1);
         await new Promise((r) => setTimeout(r, backoff));
         continue;
       }
 
-      throw e;
+      throw getFriendlyNetworkError(e) ?? e;
     }
   }
 

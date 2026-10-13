@@ -16,7 +16,15 @@ const APK_MIME_TYPE = "application/vnd.android.package-archive";
  * resolves once the user returns to our app (whether or not they actually
  * completed the install).
  */
-export async function downloadAndLaunchInstaller(): Promise<void> {
+export type InstallerProgress = {
+  bytesWritten: number;
+  /** -1 when the server didn't send a Content-Length. */
+  totalBytes: number;
+};
+
+export async function downloadAndLaunchInstaller(
+  onProgress?: (progress: InstallerProgress) => void,
+): Promise<void> {
   if (Platform.OS !== "android") {
     throw new Error("Installing updates is only supported on Android.");
   }
@@ -32,6 +40,7 @@ export async function downloadAndLaunchInstaller(): Promise<void> {
   const downloaded = await File.downloadFileAsync(url, destination, {
     headers: { Authorization: `Bearer ${token}` },
     idempotent: true,
+    onProgress,
   });
 
   const contentUri = downloaded.contentUri;

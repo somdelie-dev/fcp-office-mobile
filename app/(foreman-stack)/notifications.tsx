@@ -47,6 +47,22 @@ const TYPE_ICON: Record<string, { name: any; color: string }> = {
     name: "scan-outline",
     color: "#ef4444",
   },
+  ADMIN_MESSAGE: {
+    name: "megaphone-outline",
+    color: "#3b82f6",
+  },
+  OVERTIME_REQUESTED: {
+    name: "time-outline",
+    color: "#f59e0b",
+  },
+  OVERTIME_APPROVED: {
+    name: "checkmark-circle-outline",
+    color: "#22c55e",
+  },
+  OVERTIME_REJECTED: {
+    name: "close-circle-outline",
+    color: "#ef4444",
+  },
   GENERAL: {
     name: "notifications-outline",
     color: "#6b7280",
@@ -144,7 +160,8 @@ function NotifItem({
               color: isDark ? "#94a3b8" : "#475569",
             },
           ]}
-          numberOfLines={2}
+          // Admin messages are the content itself, so show them in full.
+          numberOfLines={item.type === "ADMIN_MESSAGE" ? undefined : 2}
         >
           {item.message}
         </Text>
@@ -171,8 +188,15 @@ export default function NotificationsScreen() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
-  const { notifications, unreadCount, loading, refresh, markAllRead, markRead } =
-    useNotifications();
+  const {
+    notifications,
+    unreadCount,
+    loading,
+    error,
+    refresh,
+    markAllRead,
+    markRead,
+  } = useNotifications();
 
   const handleItemPress = (item: AppNotification) => {
     if (!item.isRead) {
@@ -315,19 +339,30 @@ export default function NotificationsScreen() {
               },
             ]}
           >
-            No notifications yet
+            {error ? "Couldn't load notifications" : "No notifications yet"}
           </Text>
 
           <Text
             style={[
               styles.emptyText,
               {
-                color: isDark ? "#64748b" : "#94a3b8",
+                color: error ? "#ef4444" : isDark ? "#64748b" : "#94a3b8",
               },
             ]}
           >
-            You're all caught up.
+            {error ?? "You're all caught up."}
           </Text>
+
+          <Pressable
+            onPress={refresh}
+            disabled={loading}
+            style={[styles.refreshButton, { opacity: loading ? 0.6 : 1 }]}
+          >
+            <Ionicons name="refresh" size={16} color="#fff" />
+            <Text style={styles.refreshButtonText}>
+              {error ? "Try again" : "Refresh"}
+            </Text>
+          </Pressable>
         </View>
       ) : (
         <FlatList
@@ -482,6 +517,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
   },
 
+  refreshButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: "#22c55e",
+  },
+  refreshButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
+  },
   loadingText: {
     fontSize: 13,
   },

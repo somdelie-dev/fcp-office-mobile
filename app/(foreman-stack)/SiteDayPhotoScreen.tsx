@@ -24,12 +24,17 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import * as ImagePicker from "expo-image-picker";
+import { File, Paths } from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import LoadingOverlay from "@/components/LoadingOverlay";
+import { ZoomableImage } from "@/components/ZoomableImage";
 import { FaceScreenBackground, GlassPanel, Header } from "@/components/team";
 import {
   useFaceTheme,
@@ -41,6 +46,8 @@ import {
   apiForemanRecentSiteDayPhotosCached,
   apiMeCached,
   apiScanOutAll,
+  apiForemanScannedInWorkers,
+  type ScannedInWorkerDto,
   apiSitesCached,
   type ApiMeResponse,
   type ForemanDayDetailDto,
@@ -50,10 +57,13 @@ import {
   type SiteDayPhotoDto,
   type SiteDayPhotoRequestDto,
 } from "@/lib/apiClient";
+import { getFriendlyNetworkError } from "@/lib/apiErrors";
 import { getSitesScannedToday } from "@/lib/assistantHistoryStore";
 import { useAuth } from "@/lib/auth";
 import { compressImage } from "@/lib/imageCompression";
 import { isCurrentlyOnline } from "@/lib/offline/networkStatus";
+import { isOvertimePromptTime } from "@/lib/overtimeTime";
+import { enqueuePhotoScanOut } from "@/lib/offline/queue";
 import { cancelSiteDayPhotoReminder } from "@/lib/push";
 import { useLocation } from "@/lib/useLocation";
 import { uploadWithProgress } from "@/lib/upload";
@@ -114,6 +124,29 @@ function getVerificationDisplay(
   }
 }
 
+type CapturedPhoto = {
+  uri: string;
+  name: string;
+  type: string;
+  // Lets the server recognise a retried upload of the same photo instead of
+  // storing it twice when a response was lost to a timeout.
+  uploadId: string;
+};
+
+function newUploadId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function discardCapturedPhoto(uri: string) {
+  if (Platform.OS === "web" || !uri.includes("/captured-")) return;
+  try {
+    const f = new File(uri);
+    if (f.exists) f.delete();
+  } catch (e) {
+    console.warn("Failed to delete captured photo:", e);
+  }
+}
+
 export default function SiteDayPhotoScreen() {
   const { colors, typography, radius, spacing } = useFaceTheme();
   const { getLocationWithAddress } = useLocation();
@@ -146,16 +179,21 @@ export default function SiteDayPhotoScreen() {
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
     null,
   );
-  const [pendingPhoto, setPendingPhoto] = useState<{
-    uri: string;
-    name: string;
-    type: string;
-  } | null>(null);
+  const [pendingPhoto, setPendingPhoto] = useState<CapturedPhoto | null>(
+    null,
+  );
   const [recentPhotos, setRecentPhotos] = useState<
     ForemanRecentSiteDayPhotoDto[]
   >([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [stillScannedInCount, setStillScannedInCount] = useState(0);
+  const [overtimePicker, setOvertimePicker] = useState<{
+    workers: ScannedInWorkerDto[];
+    selected: Set<string>;
+  } | null>(null);
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   // Track when a photo was just uploaded (to hide button immediately)
   const [justUploadedPhoto, setJustUploadedPhoto] = useState(false);
@@ -248,9 +286,10 @@ export default function SiteDayPhotoScreen() {
   }, [recentPhotos, dateISO]);
 
   // Has ANY photo been submitted for this day (regardless of request)
-  // Also check justUploadedPhoto for immediate UI update after upload
-  const hasAnyPhotoForDay =
-    photosForDay.length > 0 || hasRecentPhotoForDate || justUploadedPhoto;
+  // Note: do NOT use `justUploadedPhoto` to hide the Take Photo button —
+  // we want the foreman to be able to take/submit additional photos/scan-outs
+  // on the same day even immediately after an upload.
+  const hasAnyPhotoForDay = photosForDay.length > 0 || hasRecentPhotoForDate;
 
   // Has a photo been submitted for this specific request?
   const hasSubmittedPhoto = photosForSelectedRequest.length > 0;
@@ -267,8 +306,30 @@ export default function SiteDayPhotoScreen() {
   // Determine if we should show the take photo button:
   // - Hide completely if ANY photo was successfully uploaded today
   // - Only show if rejected (can retake)
+  // - Or while workers are still scanned in (e.g. normal-time workers left
+  //   after an overtime scan-out), so they can be scanned out too
   const shouldShowTakePhotoButton =
-    isToday && (!hasAnyPhotoForDay || canRetake);
+    isToday && (!hasAnyPhotoForDay || canRetake || stillScannedInCount > 0);
+
+  useEffect(() => {
+    const siteDayId = day?.id;
+    if (!siteDayId) {
+      setStillScannedInCount(0);
+      return;
+    }
+    let cancelled = false;
+    apiForemanScannedInWorkers(siteDayId)
+      .then(({ workers }) => {
+        if (!cancelled) setStillScannedInCount(workers.length);
+      })
+      .catch(() => {
+        // Older servers lack this endpoint; keep the original behaviour.
+        if (!cancelled) setStillScannedInCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [day]);
 
   // Ref to track if initial load has happened
   const initialLoadDoneRef = useRef(false);
@@ -463,15 +524,36 @@ export default function SiteDayPhotoScreen() {
     const asset = res.assets?.[0];
     if (!asset?.uri) return null;
 
-    const uri = asset.uri;
-    const nameGuess = uri.split("/").pop() || `photo-${Date.now()}.jpg`;
+    const nameGuess = asset.uri.split("/").pop() || `photo-${Date.now()}.jpg`;
     const typeGuess = asset.mimeType || "image/jpeg";
 
-    return { uri, name: nameGuess, type: typeGuess };
+    // The picker writes into the app cache, which Android may purge before
+    // the foreman taps Submit ("Could not retrieve file for uri ...").
+    let uri = asset.uri;
+    if (Platform.OS !== "web") {
+      try {
+        const durable = new File(Paths.document, `captured-${Date.now()}.jpg`);
+        await new File(asset.uri).copy(durable);
+        uri = durable.uri;
+      } catch (e) {
+        console.warn("Could not keep a durable copy of the photo:", e);
+      }
+    }
+
+    const photo: CapturedPhoto = {
+      uri,
+      name: nameGuess,
+      type: typeGuess,
+      uploadId: newUploadId(),
+    };
+    return photo;
   }, [ensureCameraPermissions]);
 
   const doUpload = useCallback(
-    async (file: { uri: string; name: string; type: string }): Promise<boolean> => {
+    async (
+      file: CapturedPhoto,
+      overtimeEmployeeIds: string[] | null = null,
+    ): Promise<boolean> => {
       if (!siteId) {
         Alert.alert("No site selected", "Please select a site first.");
         return false;
@@ -482,11 +564,14 @@ export default function SiteDayPhotoScreen() {
       // a clear message instead of silently working through several
       // minutes of chained timeouts (site day, location, upload, scan-out)
       // only to land on the same outcome.
-      if (!isCurrentlyOnline()) {
+      const onlineAtStart = isCurrentlyOnline();
+
+      if (Platform.OS !== "web" && !new File(file.uri).exists) {
         Alert.alert(
-          "You're offline",
-          "Photo scan-out needs an internet connection. Please try again once you're back online.",
+          "Photo no longer available",
+          "The phone cleared this photo before it was sent. Please retake it.",
         );
+        setPendingPhoto(null);
         return false;
       }
 
@@ -494,22 +579,6 @@ export default function SiteDayPhotoScreen() {
       setError(null);
 
       try {
-        // Ensure SiteDay exists (create if needed)
-        let siteDayId = day?.id;
-        if (!siteDayId) {
-          try {
-            const result = await apiEnsureSiteDay(siteId, dateISO);
-            siteDayId = result.siteDayId;
-          } catch (e: any) {
-            Alert.alert(
-              "Failed to create site day",
-              e?.message ?? "Please try again.",
-            );
-            setUploading(false);
-            return false;
-          }
-        }
-
         // Get device location with address
         const location = await getLocationWithAddress();
         if (!location) {
@@ -527,6 +596,61 @@ export default function SiteDayPhotoScreen() {
           maxHeight: 1600,
           quality: 0.7,
         });
+
+        if (
+          overtimeEmployeeIds &&
+          (!onlineAtStart || !isCurrentlyOnline())
+        ) {
+          // The server stamps overtime hours, so it can't be queued offline.
+          Alert.alert(
+            "Internet needed for overtime",
+            "Overtime scan-out needs a connection. Try again when you have signal, or scan out as normal time.",
+          );
+          return false;
+        }
+
+        if (!onlineAtStart || !isCurrentlyOnline()) {
+          // Camera and image-picker URIs can point into OS-managed cache;
+          // retain a durable copy until the queued upload succeeds.
+          const durablePhoto = new File(
+            Paths.document,
+            `pending-scanout-${Date.now()}.jpg`,
+          );
+          await new File(compressed.uri).copy(durablePhoto);
+          await enqueuePhotoScanOut({
+            siteId,
+            dateISO,
+            photoUri: durablePhoto.uri,
+            uploadId: file.uploadId,
+            actingForemanId: await AsyncStorage.getItem("acting_foreman_id"),
+            requestId: selectedRequestId,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            address: location.address,
+          });
+          Alert.alert(
+            "Scan-out saved on this phone",
+            "The photo and scan-out are queued. They will upload automatically when the app has internet and is open. Until then, the scan-out is still waiting to sync.",
+          );
+          return true;
+        }
+
+        // Ensure SiteDay exists (create if needed) only after the offline
+        // path has safely saved the photo and queued the complete action.
+        let siteDayId = day?.id;
+        if (!siteDayId) {
+          try {
+            const result = await apiEnsureSiteDay(siteId, dateISO);
+            siteDayId = result.siteDayId;
+          } catch (e: any) {
+            Alert.alert(
+              "Failed to create site day",
+              e?.message ?? "Please try again.",
+            );
+            setUploading(false);
+            return false;
+          }
+        }
 
         // Use compressed URI for upload
         const compressedFile = {
@@ -546,7 +670,9 @@ export default function SiteDayPhotoScreen() {
           siteDayId,
         )}/photos`;
 
-        const formFields: Record<string, string | undefined> = {};
+        const formFields: Record<string, string | undefined> = {
+          clientUploadId: file.uploadId,
+        };
         if (selectedRequestId) formFields.requestId = selectedRequestId;
         if (location.latitude != null)
           formFields.latitude = String(location.latitude);
@@ -575,10 +701,18 @@ export default function SiteDayPhotoScreen() {
             latitude: location.latitude,
             longitude: location.longitude,
             address: location.address,
+            ...(overtimeEmployeeIds
+              ? { employeeIds: overtimeEmployeeIds, overtime: true }
+              : {}),
           });
 
           const outCount = scanOutResult?.scannedOutCount ?? 0;
-          if (outCount > 0) {
+          if (scanOutResult?.overtimeRequest) {
+            Alert.alert(
+              "Overtime sent for approval",
+              `${outCount} person(s) scanned out on ${scanOutResult.overtimeRequest.hours} hour(s) overtime. Your supervisor will review it.`,
+            );
+          } else if (outCount > 0) {
             Alert.alert(
               "Photo Saved & People Scanned Out",
               `Photo uploaded successfully.\n${outCount} person(s) have been scanned out for the day.`,
@@ -588,9 +722,17 @@ export default function SiteDayPhotoScreen() {
           }
         } catch (scanOutErr: any) {
           console.warn("Scan-out after photo upload failed:", scanOutErr);
+          const friendly = getFriendlyNetworkError(scanOutErr);
+          // HTTP errors already carry a readable message from apiFetch
+          // (e.g. "Overtime can only be recorded from 17:00...").
+          const reason =
+            friendly?.message ??
+            (scanOutErr?.status ? scanOutErr.message : null);
           Alert.alert(
-            "Photo Saved",
-            "Photo uploaded, but automatic scan-out failed. You may need to scan out manually.",
+            "Photo saved, scan-out failed",
+            reason
+              ? `${reason}\n\nThe photo was uploaded. Please try the scan-out again.`
+              : "Photo uploaded, but automatic scan-out failed. You may need to scan out manually.",
           );
         }
 
@@ -620,7 +762,13 @@ export default function SiteDayPhotoScreen() {
 
         return true;
       } catch (e: any) {
-        Alert.alert("Upload failed", e?.message ?? "Please try again.");
+        console.error("Upload failed:", e);
+        const friendly = getFriendlyNetworkError(e);
+        Alert.alert(
+          "Upload failed",
+          friendly?.message ??
+            "Upload failed. Check your internet connection and try again.",
+        );
         return false;
       } finally {
         setUploading(false);
@@ -642,8 +790,11 @@ export default function SiteDayPhotoScreen() {
       return;
     }
     const file = await takePhoto();
-    if (file) setPendingPhoto(file);
-  }, [siteId, takePhoto]);
+    if (file) {
+      if (pendingPhoto) discardCapturedPhoto(pendingPhoto.uri);
+      setPendingPhoto(file);
+    }
+  }, [siteId, takePhoto, pendingPhoto]);
 
   const onPressTakePhoto = useCallback(() => {
     // Open camera and store a preview; user can submit after checking.
@@ -654,16 +805,82 @@ export default function SiteDayPhotoScreen() {
     captureAndPreview();
   }, [captureAndPreview]);
 
-  const onPressSubmitPhoto = useCallback(async () => {
+  const submitPendingPhoto = useCallback(
+    async (overtimeEmployeeIds: string[] | null) => {
+      if (!pendingPhoto) return;
+      const succeeded = await doUpload(pendingPhoto, overtimeEmployeeIds);
+      // Only clear the captured photo once it's actually made it to the server -
+      // otherwise the foreman would have to retake/recompress it to retry.
+      if (succeeded) {
+        discardCapturedPhoto(pendingPhoto.uri);
+        setPendingPhoto(null);
+      }
+    },
+    [pendingPhoto, doUpload],
+  );
+
+  const openOvertimePicker = useCallback(async () => {
+    if (!day?.id) {
+      Alert.alert(
+        "No one to scan out",
+        "Nobody is scanned in on this site today.",
+      );
+      return;
+    }
+    try {
+      const { workers } = await apiForemanScannedInWorkers(day.id);
+      if (workers.length === 0) {
+        Alert.alert(
+          "No one to scan out",
+          "Everyone on this site is already scanned out.",
+        );
+        return;
+      }
+      setOvertimePicker({ workers, selected: new Set() });
+    } catch (e: any) {
+      Alert.alert(
+        "Couldn't load workers",
+        e?.message ?? "Please check your connection and try again.",
+      );
+    }
+  }, [day?.id]);
+
+  const onPressSubmitPhoto = useCallback(() => {
     if (!pendingPhoto) {
       Alert.alert("No photo", "Take a photo first before submitting.");
       return;
     }
-    const succeeded = await doUpload(pendingPhoto);
-    // Only clear the captured photo once it's actually made it to the server -
-    // otherwise the foreman would have to retake/recompress it to retry.
-    if (succeeded) setPendingPhoto(null);
-  }, [pendingPhoto, doUpload]);
+    if (!isOvertimePromptTime()) {
+      submitPendingPhoto(null);
+      return;
+    }
+    Alert.alert(
+      "Is this overtime?",
+      "Choose Yes to pick the workers who worked overtime. The others stay scanned in.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "No, normal time", onPress: () => submitPendingPhoto(null) },
+        { text: "Yes, overtime", onPress: () => openOvertimePicker() },
+      ],
+    );
+  }, [pendingPhoto, submitPendingPhoto, openOvertimePicker]);
+
+  const toggleOvertimeWorker = useCallback((employeeId: string) => {
+    setOvertimePicker((prev) => {
+      if (!prev) return prev;
+      const selected = new Set(prev.selected);
+      if (selected.has(employeeId)) selected.delete(employeeId);
+      else selected.add(employeeId);
+      return { ...prev, selected };
+    });
+  }, []);
+
+  const confirmOvertimeWorkers = useCallback(() => {
+    if (!overtimePicker || overtimePicker.selected.size === 0) return;
+    const ids = Array.from(overtimePicker.selected);
+    setOvertimePicker(null);
+    submitPendingPhoto(ids);
+  }, [overtimePicker, submitPendingPhoto]);
 
   const requestLabel = (r: SiteDayPhotoRequestDto) => {
     const due = r.dueAt ? ` • due ${r.dueAt.slice(11, 16)}` : "";
@@ -694,8 +911,8 @@ export default function SiteDayPhotoScreen() {
             <View style={{ gap: 6 }}>
               <Text style={typography.headline}>No Sites Scanned Today</Text>
               <Text style={typography.body}>
-                No one scanned in today. Scan guys in on a site first, then
-                come back here to take site day photos.
+                No one scanned in today. Scan guys in on a site first, then come
+                back here to take site day photos.
               </Text>
             </View>
           </GlassPanel>
@@ -706,10 +923,7 @@ export default function SiteDayPhotoScreen() {
 
   return (
     <FaceScreenBackground>
-      <Header
-        title="Photo Scan Out"
-        subtitle={headerSub ?? selectedSiteName}
-      />
+      <Header title="Photo Scan Out" subtitle={headerSub ?? selectedSiteName} />
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
@@ -752,7 +966,9 @@ export default function SiteDayPhotoScreen() {
                   },
                 ]}
               >
-                <Text style={[typography.caption, { color: colors.textPrimary }]}>
+                <Text
+                  style={[typography.caption, { color: colors.textPrimary }]}
+                >
                   Refresh
                 </Text>
               </TouchableOpacity>
@@ -860,7 +1076,10 @@ export default function SiteDayPhotoScreen() {
                     },
                   ]}
                 >
-                  {getVerificationDisplay(latestVerificationStatus, colors).label}
+                  {
+                    getVerificationDisplay(latestVerificationStatus, colors)
+                      .label
+                  }
                 </Text>
               </View>
             )}
@@ -948,7 +1167,10 @@ export default function SiteDayPhotoScreen() {
                   onPress={onPressTakePhoto}
                 >
                   <Text
-                    style={[typography.bodyStrong, { color: colors.textOnPrimary }]}
+                    style={[
+                      typography.bodyStrong,
+                      { color: colors.textOnPrimary },
+                    ]}
                   >
                     {canRetake ? "Retake Photo" : "Take Photo"}
                   </Text>
@@ -1108,7 +1330,12 @@ export default function SiteDayPhotoScreen() {
                           { backgroundColor: colors.glassFillStrong },
                         ]}
                       >
-                        <Text style={[typography.caption, { color: colors.textPrimary }]}>
+                        <Text
+                          style={[
+                            typography.caption,
+                            { color: colors.textPrimary },
+                          ]}
+                        >
                           {r.photoCount ?? 0} photos
                         </Text>
                       </View>
@@ -1145,7 +1372,10 @@ export default function SiteDayPhotoScreen() {
                   return (
                     <View
                       key={p.id}
-                      style={[styles.photoRow, { borderColor: colors.glassBorder }]}
+                      style={[
+                        styles.photoRow,
+                        { borderColor: colors.glassBorder },
+                      ]}
                     >
                       <TouchableOpacity
                         onPress={() => setPreviewUri(p.imageUrl)}
@@ -1231,30 +1461,144 @@ export default function SiteDayPhotoScreen() {
       {uploading && <LoadingOverlay />}
 
       <Modal
+        visible={!!overtimePicker}
+        transparent
+        statusBarTranslucent
+        animationType="slide"
+        onRequestClose={() => setOvertimePicker(null)}
+      >
+        <View style={styles.sheetOverlay}>
+          <View
+            style={[
+              styles.sheet,
+              {
+                backgroundColor: colors.backgroundElevated,
+                paddingBottom: insets.bottom + 16,
+              },
+            ]}
+          >
+            <Text style={[typography.headline, { color: colors.textPrimary }]}>
+              Who worked overtime?
+            </Text>
+            <Text style={[typography.body, { color: colors.textSecondary }]}>
+              Only the workers you select are scanned out now. The rest stay
+              scanned in.
+            </Text>
+            <ScrollView style={styles.sheetList}>
+              {overtimePicker?.workers.map((w) => {
+                const checked = overtimePicker.selected.has(w.employeeId);
+                return (
+                  <TouchableOpacity
+                    key={w.employeeId}
+                    onPress={() => toggleOvertimeWorker(w.employeeId)}
+                    style={[
+                      styles.workerRow,
+                      {
+                        borderColor: checked
+                          ? colors.successBorder
+                          : colors.glassBorder,
+                        backgroundColor: checked
+                          ? colors.successDim
+                          : "transparent",
+                      },
+                    ]}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked }}
+                  >
+                    <Ionicons
+                      name={checked ? "checkbox" : "square-outline"}
+                      size={24}
+                      color={checked ? colors.success : colors.textSecondary}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          typography.bodyStrong,
+                          { color: colors.textPrimary },
+                        ]}
+                      >
+                        {w.name || w.code}
+                      </Text>
+                      <Text
+                        style={[
+                          typography.caption,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        {w.code}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <View style={styles.sheetButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.pillButton,
+                  { flex: 1, borderColor: colors.glassBorder },
+                ]}
+                onPress={() => setOvertimePicker(null)}
+              >
+                <Text
+                  style={[typography.bodyStrong, { color: colors.textPrimary }]}
+                >
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.pillButton,
+                  {
+                    flex: 2,
+                    borderColor: colors.success,
+                    backgroundColor: colors.success,
+                    opacity: overtimePicker?.selected.size ? 1 : 0.5,
+                  },
+                ]}
+                disabled={!overtimePicker?.selected.size}
+                onPress={confirmOvertimeWorkers}
+              >
+                <Text
+                  style={[
+                    typography.bodyStrong,
+                    { color: colors.textOnPrimary },
+                  ]}
+                >
+                  Scan out {overtimePicker?.selected.size ?? 0} on overtime
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
         visible={!!previewUri}
         transparent
+        statusBarTranslucent
         animationType="fade"
         onRequestClose={() => setPreviewUri(null)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {previewUri && (
-              <Image
-                source={{ uri: previewUri }}
-                style={styles.modalImage}
-                resizeMode="contain"
-              />
-            )}
-            <TouchableOpacity
-              style={[
-                styles.pillButton,
-                { marginTop: 16, backgroundColor: colors.glassFillStrong },
-              ]}
-              onPress={() => setPreviewUri(null)}
-            >
-              <Text style={typography.bodyStrong}>Close</Text>
-            </TouchableOpacity>
-          </View>
+          {previewUri && (
+            <ZoomableImage
+              uri={previewUri}
+              width={windowWidth - 32}
+              height={windowHeight - insets.top - insets.bottom - 140}
+              borderRadius={12}
+            />
+          )}
+          {/* Drawn after the image so it always sits on top of it. */}
+          <TouchableOpacity
+            style={[styles.modalClose, { top: insets.top + 12 }]}
+            onPress={() => setPreviewUri(null)}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Close photo"
+          >
+            <Ionicons name="close-circle" size={40} color="#fff" />
+          </TouchableOpacity>
         </View>
       </Modal>
     </FaceScreenBackground>
@@ -1342,19 +1686,43 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.9)",
+    backgroundColor: "rgba(0,0,0,0.92)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
   },
-  modalContent: {
-    width: "100%",
-    maxHeight: "90%",
+  sheetOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  sheet: {
+    maxHeight: "85%",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+    gap: 10,
+  },
+  sheetList: {
+    flexGrow: 0,
+  },
+  workerRow: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+    marginBottom: 8,
   },
-  modalImage: {
-    width: "100%",
-    height: "80%",
+  sheetButtons: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  modalClose: {
+    position: "absolute",
+    right: 16,
+    zIndex: 10,
+    elevation: 10,
   },
   previewBlock: {
     marginTop: 10,
