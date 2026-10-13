@@ -113,3 +113,7 @@ fcp-production.keystore
 *.keystore
 
 android/signing.properties
+
+# Local secrets and EAS build scratch files
+.env
+.eas-tmp/
