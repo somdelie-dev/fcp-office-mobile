@@ -90,31 +90,31 @@ const POSES: PoseSpec[] = [
     pose: "FRONT",
     label: "Front",
     instruction: "Look straight at the camera",
-    refImage: require("../../../../assets/images/face-ref/01_FRONT.png"),
+    refImage: require("../../../../assets/images/face-ref/01_FRONT.jpg"),
   },
   {
     pose: "LEFT",
     label: "Left",
     instruction: "Slowly turn your head to the left",
-    refImage: require("../../../../assets/images/face-ref/02_LEFT.png"),
+    refImage: require("../../../../assets/images/face-ref/02_LEFT.jpg"),
   },
   {
     pose: "RIGHT",
     label: "Right",
     instruction: "Slowly turn your head to the right",
-    refImage: require("../../../../assets/images/face-ref/03_RIGHT.png"),
+    refImage: require("../../../../assets/images/face-ref/03_RIGHT.jpg"),
   },
   {
     pose: "SMILE",
     label: "Smile",
     instruction: "Give a natural smile",
-    refImage: require("../../../../assets/images/face-ref/04_SMILE.png"),
+    refImage: require("../../../../assets/images/face-ref/04_SMILE.jpg"),
   },
   {
     pose: "NEUTRAL",
     label: "Neutral",
     instruction: "Relax your expression",
-    refImage: require("../../../../assets/images/face-ref/05_NEUTRAL.png"),
+    refImage: require("../../../../assets/images/face-ref/05_NEUTRAL.jpg"),
   },
 ];
 
