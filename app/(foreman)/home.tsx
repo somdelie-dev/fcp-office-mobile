@@ -629,6 +629,18 @@ export default function ForemanHome() {
                   Download Timesheet
                 </Text>
               </Pressable>
+
+              <Pressable
+                style={styles.downloadTimesheetBtn}
+                onPress={() => router.push("/(foreman-stack)/calendar" as any)}
+              >
+                <Ionicons
+                  name="calendar-outline"
+                  size={16}
+                  color={colors.success}
+                />
+                <Text style={styles.downloadTimesheetTxt}>My calendar</Text>
+              </Pressable>
             </GlassPanel>
 
             <GlassPanel contentPadding={16} radius={5}>

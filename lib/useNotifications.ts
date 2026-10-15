@@ -11,6 +11,8 @@ export interface AppNotification {
   createdAt: string;
   siteId: string | null;
   linkUrl: string | null;
+  /** Set on calendar invites, changes and reminders; missing on older servers. */
+  calendarEventId?: string | null;
 }
 
 export function useNotifications(pollIntervalMs = 30 * 60_000) {

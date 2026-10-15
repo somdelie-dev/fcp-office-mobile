@@ -12,6 +12,7 @@ import {
   LogOut,
   ArrowLeftRight,
   Printer,
+  CalendarDays,
   Calculator,
   MessageSquare,
   Timer,
@@ -774,6 +775,40 @@ export default function AdminHomeScreen() {
                 </Text>
                 <Text style={[styles.quickActionSub, { color: textSub }]}>
                   Paint quantities &amp; quick sums
+                </Text>
+              </View>
+              <ChevronRight size={18} color={textSub} />
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.quickActionBtn,
+                {
+                  backgroundColor: pressed
+                    ? isDark
+                      ? "rgba(37,99,235,0.25)"
+                      : "rgba(37,99,235,0.12)"
+                    : isDark
+                      ? "rgba(37,99,235,0.15)"
+                      : "rgba(37,99,235,0.08)",
+                },
+              ]}
+              onPress={() => router.push("/(foreman-stack)/calendar" as any)}
+            >
+              <View
+                style={[
+                  styles.quickActionIcon,
+                  { backgroundColor: "rgba(37,99,235,0.2)" },
+                ]}
+              >
+                <CalendarDays size={20} color="#2563eb" strokeWidth={2.2} />
+              </View>
+              <View style={styles.quickActionText}>
+                <Text style={[styles.quickActionTitle, { color: textMain }]}>
+                  Calendar
+                </Text>
+                <Text style={[styles.quickActionSub, { color: textSub }]}>
+                  Shared events &amp; reminders
                 </Text>
               </View>
               <ChevronRight size={18} color={textSub} />

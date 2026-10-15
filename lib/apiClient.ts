@@ -1482,6 +1482,111 @@ export async function apiAdminDeleteCatalogueProduct(id: string) {
   });
 }
 
+export type CalendarCategory =
+  | "MEETING"
+  | "SITE_VISIT"
+  | "DEADLINE"
+  | "REMINDER"
+  | "OTHER";
+export type CalendarResponseValue = "PENDING" | "ACCEPTED" | "DECLINED";
+
+export type CalendarEventDto = {
+  id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  category: CalendarCategory;
+  startsAt: string;
+  endsAt: string | null;
+  allDay: boolean;
+  /** Minutes before start; null = no reminder, 0 = at start. */
+  reminderMinutes: number | null;
+  createdBy: { id: string; name: string };
+  isOwner: boolean;
+  myResponse: CalendarResponseValue | null;
+  attendees: {
+    userId: string;
+    name: string;
+    role: string;
+    response: CalendarResponseValue;
+  }[];
+};
+
+export type CalendarEventInput = {
+  title: string;
+  description: string | null;
+  location: string | null;
+  category: CalendarCategory;
+  startsAt: string;
+  endsAt: string | null;
+  allDay: boolean;
+  reminderMinutes: number | null;
+  attendeeUserIds: string[];
+};
+
+export type CalendarPersonDto = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+};
+
+export async function apiCalendarEvents(
+  fromISO: string,
+  toISO: string,
+): Promise<{ canCreate: boolean; events: CalendarEventDto[] }> {
+  const qs = `from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`;
+  return apiFetch(`/api/app/calendar/events?${qs}`, { auth: true });
+}
+
+export async function apiCalendarEvent(id: string): Promise<{ event: CalendarEventDto }> {
+  return apiFetch(`/api/app/calendar/events/${encodeURIComponent(id)}`, { auth: true });
+}
+
+export async function apiCalendarCreate(
+  input: CalendarEventInput,
+): Promise<{ event: CalendarEventDto }> {
+  return apiFetch("/api/app/calendar/events", {
+    method: "POST",
+    body: JSON.stringify(input),
+    auth: true,
+  });
+}
+
+export async function apiCalendarUpdate(
+  id: string,
+  input: CalendarEventInput,
+): Promise<{ event: CalendarEventDto }> {
+  return apiFetch(`/api/app/calendar/events/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+    auth: true,
+  });
+}
+
+export async function apiCalendarDelete(id: string) {
+  return apiFetch(`/api/app/calendar/events/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    auth: true,
+  });
+}
+
+export async function apiCalendarRespond(
+  id: string,
+  response: "ACCEPTED" | "DECLINED",
+) {
+  return apiFetch(`/api/app/calendar/events/${encodeURIComponent(id)}/respond`, {
+    method: "POST",
+    body: JSON.stringify({ response }),
+    auth: true,
+  });
+}
+
+/** People an event can be shared with (creators only). */
+export async function apiCalendarPeople(): Promise<{ people: CalendarPersonDto[] }> {
+  return apiFetch("/api/app/calendar/people", { auth: true });
+}
+
 export type MessageAudience =
   | "ALL_FOREMEN"
   | "ALL_SUPERVISORS"

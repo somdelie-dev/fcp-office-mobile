@@ -346,6 +346,12 @@ export default function SupervisorHome() {
               theme={colors}
             /> */}
             <ActionButton
+              icon="calendar"
+              label="Calendar"
+              onPress={() => router.push("/(foreman-stack)/calendar" as any)}
+              theme={colors}
+            />
+            <ActionButton
               icon="time"
               label="Overtime Approvals"
               badge={pendingOvertime > 0 ? pendingOvertime : undefined}
@@ -368,7 +374,9 @@ export default function SupervisorHome() {
             <ActionButton
               icon="scan"
               label="Face Verification"
-              onPress={() => router.push("/(supervisor-stack)/face-verifications")}
+              onPress={() =>
+                router.push("/(supervisor-stack)/face-verifications")
+              }
               theme={colors}
             />
             <ActionButton

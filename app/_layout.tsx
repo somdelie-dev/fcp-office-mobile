@@ -6,6 +6,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { OfflineBanner } from "../components/OfflineStatus";
 import { UpdateGate } from "../components/UpdateGate";
+import { CalendarReminderSync } from "../components/CalendarReminderSync";
 import { AuthProvider, useAuth } from "../lib/auth";
 import { DataCacheProvider } from "../lib/dataCache";
 import { NetworkStatusListener } from "../lib/networkMonitor";
@@ -42,6 +43,18 @@ function NotificationNavigator() {
 
     const cleanup = setupNotificationListeners((data: any) => {
       if (!data || typeof data !== "object") return;
+
+      if (
+        typeof data.type === "string" &&
+        data.type.startsWith("CALENDAR_") &&
+        data.calendarEventId
+      ) {
+        router.push({
+          pathname: "/(foreman-stack)/calendar/[id]",
+          params: { id: String(data.calendarEventId) },
+        } as any);
+        return;
+      }
 
       // Handle photo request notification tap
       if (data.type === "PHOTO_REQUEST") {
@@ -122,6 +135,7 @@ export default function RootLayout() {
               <NotificationNavigator />
               <NetworkStatusListener />
               <UpdateGate />
+              <CalendarReminderSync />
               {showOfflineBanner ? <OfflineBanner /> : null}
 
               <Stack

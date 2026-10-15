@@ -63,6 +63,18 @@ const TYPE_ICON: Record<string, { name: any; color: string }> = {
     name: "close-circle-outline",
     color: "#ef4444",
   },
+  CALENDAR_INVITE: {
+    name: "calendar-outline",
+    color: "#2563eb",
+  },
+  CALENDAR_UPDATED: {
+    name: "calendar-clear-outline",
+    color: "#7c3aed",
+  },
+  CALENDAR_REMINDER: {
+    name: "alarm-outline",
+    color: "#16a34a",
+  },
   GENERAL: {
     name: "notifications-outline",
     color: "#6b7280",
@@ -89,12 +101,14 @@ function timeAgo(iso: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function hasDestination(type: string) {
+function hasDestination(item: AppNotification) {
   return (
-    type === "PHOTO_REJECTED" ||
-    type === "PHOTO_REQUESTED" ||
-    type === "SCAN_OUT_REMINDER" ||
-    type === "FACE_VERIFICATION_MISSING"
+    item.type === "PHOTO_REJECTED" ||
+    item.type === "PHOTO_REQUESTED" ||
+    item.type === "SCAN_OUT_REMINDER" ||
+    item.type === "FACE_VERIFICATION_MISSING" ||
+    // A cancelled or removed-from event has no event left to open.
+    (item.type.startsWith("CALENDAR_") && !!item.calendarEventId)
   );
 }
 
@@ -181,7 +195,7 @@ function NotifItem({
           {item.message}
         </Text>
 
-        {expanded && hasDestination(item.type) && (
+        {expanded && hasDestination(item) && (
           <Pressable
             onPress={onOpen}
             style={[styles.openBtn, { backgroundColor: icon.color }]}
@@ -240,6 +254,14 @@ export default function NotificationsScreen() {
   };
 
   const handleOpen = (item: AppNotification) => {
+    if (item.type.startsWith("CALENDAR_") && item.calendarEventId) {
+      router.push({
+        pathname: "/(foreman-stack)/calendar/[id]",
+        params: { id: item.calendarEventId },
+      } as any);
+      return;
+    }
+
     if (item.type === "PHOTO_REJECTED" || item.type === "PHOTO_REQUESTED") {
       router.push({
         pathname: "/(foreman-stack)/SiteDayPhotoScreen",
