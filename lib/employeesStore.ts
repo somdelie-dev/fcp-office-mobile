@@ -67,7 +67,7 @@ export async function upsertEmployee(input: {
   const fullName = input.fullName.trim();
   const dayRate = input.dayRate;
 
-  if (!code) return { ok: false, reason: "Worker code is required." };
+  if (!code) return { ok: false, reason: "Guy code is required." };
   if (!fullName) return { ok: false, reason: "Full name is required." };
   if (!Number.isFinite(dayRate) || dayRate < 0) {
     return { ok: false, reason: "Day rate must be a valid number." };
@@ -76,7 +76,7 @@ export async function upsertEmployee(input: {
   const existing = Object.values(cache).find(
     (e) => e.code === code && e.id !== input.id,
   );
-  if (existing) return { ok: false, reason: "Worker code already exists." };
+  if (existing) return { ok: false, reason: "Guy code already exists." };
 
   const now = Date.now();
 

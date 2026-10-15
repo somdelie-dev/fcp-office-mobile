@@ -86,7 +86,7 @@ export default function SupervisorEmployeeScreen() {
         })),
       );
     } catch (e: any) {
-      setError(e?.message ?? "Failed to load worker.");
+      setError(e?.message ?? "Failed to load guy.");
     } finally {
       setLoading(false);
     }
@@ -131,7 +131,7 @@ export default function SupervisorEmployeeScreen() {
           }}
         >
           <Text style={[typography.body, { textAlign: "center" }]}>
-            {error ?? "Worker not found."}
+            {error ?? "Guy not found."}
           </Text>
         </View>
       </FaceScreenBackground>

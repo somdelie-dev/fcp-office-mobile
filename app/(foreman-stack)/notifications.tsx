@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -89,14 +89,27 @@ function timeAgo(iso: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+function hasDestination(type: string) {
+  return (
+    type === "PHOTO_REJECTED" ||
+    type === "PHOTO_REQUESTED" ||
+    type === "SCAN_OUT_REMINDER" ||
+    type === "FACE_VERIFICATION_MISSING"
+  );
+}
+
 function NotifItem({
   item,
   isDark,
+  expanded,
   onPress,
+  onOpen,
 }: {
   item: AppNotification;
   isDark: boolean;
+  expanded: boolean;
   onPress: () => void;
+  onOpen: () => void;
 }) {
   const icon = TYPE_ICON[item.type] ?? TYPE_ICON.GENERAL;
 
@@ -145,7 +158,7 @@ function NotifItem({
                 fontWeight: "700",
               },
             ]}
-            numberOfLines={1}
+            numberOfLines={expanded ? undefined : 1}
           >
             {item.title}
           </Text>
@@ -161,11 +174,30 @@ function NotifItem({
             },
           ]}
           // Admin messages are the content itself, so show them in full.
-          numberOfLines={item.type === "ADMIN_MESSAGE" ? undefined : 2}
+          numberOfLines={
+            expanded || item.type === "ADMIN_MESSAGE" ? undefined : 2
+          }
         >
           {item.message}
         </Text>
+
+        {expanded && hasDestination(item.type) && (
+          <Pressable
+            onPress={onOpen}
+            style={[styles.openBtn, { backgroundColor: icon.color }]}
+            hitSlop={6}
+          >
+            <Text style={styles.openBtnText}>Open</Text>
+            <Ionicons name="arrow-forward" size={14} color="#fff" />
+          </Pressable>
+        )}
       </View>
+
+      <Ionicons
+        name={expanded ? "chevron-up" : "chevron-down"}
+        size={16}
+        color="#94a3b8"
+      />
 
       {!item.isRead && (
         <View
@@ -198,11 +230,16 @@ export default function NotificationsScreen() {
     markRead,
   } = useNotifications();
 
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
   const handleItemPress = (item: AppNotification) => {
     if (!item.isRead) {
       markRead([item.id]);
     }
+    setExpandedId((prev) => (prev === item.id ? null : item.id));
+  };
 
+  const handleOpen = (item: AppNotification) => {
     if (item.type === "PHOTO_REJECTED" || item.type === "PHOTO_REQUESTED") {
       router.push({
         pathname: "/(foreman-stack)/SiteDayPhotoScreen",
@@ -391,7 +428,9 @@ export default function NotificationsScreen() {
             <NotifItem
               item={item}
               isDark={isDark}
+              expanded={expandedId === item.id}
               onPress={() => handleItemPress(item)}
+              onOpen={() => handleOpen(item)}
             />
           )}
         />
@@ -458,7 +497,7 @@ const styles = StyleSheet.create({
 
   item: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     paddingHorizontal: 16,
     paddingVertical: 14,
     gap: 12,
@@ -507,6 +546,23 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     flexShrink: 0,
+    marginTop: 6,
+  },
+
+  openBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  openBtnText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "700",
   },
 
   center: {

@@ -1264,6 +1264,319 @@ export async function apiSupervisorRejectOvertime(id: string, note: string) {
   );
 }
 
+export type OvertimeEntryDto = {
+  id: string;
+  siteId: string;
+  siteName: string;
+  siteCode: string | null;
+  foremanId: string;
+  foremanName: string;
+  supervisorId: string | null;
+  supervisorName: string | null;
+  workDate: string;
+  overtimePriceId: string;
+  overtimePriceLabel: string;
+  rateAtCreation: number;
+  numberOfEmployees: number;
+  hoursWorked: number;
+  totalCost: number;
+  note: string | null;
+  paidAt: string | null;
+  paidBy: string | null;
+  createdBy: string | null;
+  createdAt: string;
+};
+
+export type OvertimePriceDto = {
+  id: string;
+  label: string;
+  rate: number;
+  isActive: boolean;
+};
+
+export async function apiAdminOvertimeEntries(query: {
+  siteId?: string;
+  foremanId?: string;
+  /** Supervisor's user id; matches the supervisor currently on the entry's site. */
+  supervisorId?: string;
+  paid?: "PAID" | "UNPAID";
+  from?: string;
+  to?: string;
+  /** Which date from/to applies to; defaults to the day worked. */
+  dateField?: "workDate" | "createdAt";
+}): Promise<{ ok: true; data: OvertimeEntryDto[] }> {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) if (v) params.set(k, v);
+  const qs = params.toString();
+  return apiFetch(`/api/app/admin/overtime-entries${qs ? `?${qs}` : ""}`, {
+    auth: true,
+  });
+}
+
+export async function apiAdminCreateOvertimeEntry(input: {
+  siteId: string;
+  foremanId: string;
+  overtimePriceId: string;
+  workDate: string;
+  numberOfEmployees: number;
+  hoursWorked: number;
+  note?: string;
+}) {
+  return apiFetch("/api/app/admin/overtime-entries", {
+    method: "POST",
+    body: JSON.stringify(input),
+    auth: true,
+  });
+}
+
+export async function apiAdminSetOvertimeEntryPaid(id: string, paid: boolean) {
+  return apiFetch(`/api/app/admin/overtime-entries/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ action: paid ? "MARK_PAID" : "MARK_UNPAID" }),
+    auth: true,
+  });
+}
+
+/** Replaces an entry's details; the total is recalculated server-side. */
+export async function apiAdminUpdateOvertimeEntry(
+  id: string,
+  input: {
+    siteId: string;
+    foremanId: string;
+    overtimePriceId: string;
+    workDate: string;
+    numberOfEmployees: number;
+    hoursWorked: number;
+    note: string | null;
+  },
+) {
+  return apiFetch(`/api/app/admin/overtime-entries/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+    auth: true,
+  });
+}
+
+/** Marks many entries paid/unpaid or deletes them in a single request. */
+export async function apiAdminBulkOvertimeEntries(
+  action: "MARK_PAID" | "MARK_UNPAID" | "DELETE",
+  ids: string[],
+): Promise<{ ok: true; count: number }> {
+  return apiFetch("/api/app/admin/overtime-entries/bulk", {
+    method: "POST",
+    body: JSON.stringify({ action, ids }),
+    auth: true,
+  });
+}
+
+export async function apiAdminDeleteOvertimeEntry(id: string) {
+  return apiFetch(`/api/app/admin/overtime-entries/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    auth: true,
+  });
+}
+
+export async function apiAdminOvertimePrices(): Promise<{
+  ok: true;
+  data: OvertimePriceDto[];
+}> {
+  return apiFetch("/api/app/admin/overtime-prices?includeInactive=false", {
+    auth: true,
+  });
+}
+
+export type CatalogueCoverageDto = {
+  id: string;
+  coverageMin: string;
+  coverageMax: string;
+  coverageUnit: string;
+  perUnit: string;
+  perUnitUom: string;
+  coverageBasis: string;
+  coats: number;
+  surface: string | null;
+  applicationMethod: string | null;
+  notes: string | null;
+};
+
+export type CataloguePriceDto = {
+  /** Missing until the backend that sends it is deployed. */
+  id?: string;
+  price: string;
+  unitSize: string;
+  uom: string;
+  /** Base/colour variant (e.g. "Pastel"); null when it applies to every variant. */
+  variant?: string | null;
+  /** Manufacturer/base code of the variant, e.g. "TLS100". */
+  variantCode?: string | null;
+  /** Supplier or brand the price came from. */
+  source?: string | null;
+};
+
+export type CatalogueProductDto = {
+  id: string;
+  name: string;
+  sku: string | null;
+  uom: string | null;
+  isActive: boolean;
+  brands: { id: string; name: string }[];
+  category: { id: string; name: string } | null;
+  supplierIds: string[];
+  sizesCount: number;
+  sizes: string[];
+  colorsCount: number;
+  colors: {
+    id: string;
+    colorName: string;
+    colorCode: string | null;
+    baseType: string;
+  }[];
+  coverages: CatalogueCoverageDto[];
+  pricesCount: number;
+  prices: CataloguePriceDto[];
+};
+
+/** ADMIN/OFFICE: the Paints & Preparations catalogue, as the web page shows it. */
+export async function apiAdminCatalogue(supplierId?: string): Promise<{
+  ok: true;
+  products: CatalogueProductDto[];
+  suppliers: { id: string; name: string }[];
+  categories: { id: string; name: string }[];
+}> {
+  const qs = supplierId ? `?supplierId=${encodeURIComponent(supplierId)}` : "";
+  return apiFetch(`/api/app/admin/new-products${qs}`, { auth: true });
+}
+
+export type CatalogueProductInput = {
+  name: string;
+  sku: string | null;
+  uom: string | null;
+  categoryId: string | null;
+  supplierIds: string[];
+};
+
+export async function apiAdminCreateCatalogueProduct(input: CatalogueProductInput) {
+  return apiFetch("/api/app/admin/new-products", {
+    method: "POST",
+    body: JSON.stringify(input),
+    auth: true,
+  });
+}
+
+export async function apiAdminUpdateCatalogueProduct(
+  id: string,
+  input: CatalogueProductInput,
+) {
+  return apiFetch(`/api/app/admin/new-products/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+    auth: true,
+  });
+}
+
+/** Fails with a clear message when the product was already used in an order. */
+export async function apiAdminDeleteCatalogueProduct(id: string) {
+  return apiFetch(`/api/app/admin/new-products/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    auth: true,
+  });
+}
+
+export type MessageAudience =
+  | "ALL_FOREMEN"
+  | "ALL_SUPERVISORS"
+  | "ALL_FOREMEN_AND_SUPERVISORS"
+  | "SELECTED";
+
+export type SentMessageDto = {
+  id: string;
+  title: string;
+  body: string;
+  audience: MessageAudience;
+  recipientCount: number;
+  readCount: number;
+  createdAt: string;
+  sentBy: string;
+};
+
+export type MessageRecipientDto = {
+  id: string;
+  name: string;
+  email: string;
+  role: "FOREMAN" | "SUPERVISOR";
+  hasPush: boolean;
+};
+
+export type MessageRecipientStatusDto = {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  isRead: boolean;
+  readAt: string | null;
+};
+
+/** ADMIN: the 50 most recent sent messages with read counts. */
+export async function apiAdminMessages(): Promise<{ messages: SentMessageDto[] }> {
+  return apiFetch("/api/admin/messages", { auth: true });
+}
+
+export async function apiAdminMessageDetail(id: string): Promise<{
+  message: SentMessageDto;
+  recipients: MessageRecipientStatusDto[];
+}> {
+  return apiFetch(`/api/admin/messages/${encodeURIComponent(id)}`, { auth: true });
+}
+
+/** Foremen and supervisors an admin can message individually. */
+export async function apiAdminMessageRecipients(): Promise<{
+  recipients: MessageRecipientDto[];
+}> {
+  return apiFetch("/api/admin/messages/recipients", { auth: true });
+}
+
+export async function apiAdminSendMessage(input: {
+  title: string;
+  body: string;
+  audience: MessageAudience;
+  userIds: string[];
+}): Promise<{ ok: true; id: string; recipientCount: number }> {
+  return apiFetch("/api/admin/messages", {
+    method: "POST",
+    body: JSON.stringify(input),
+    auth: true,
+  });
+}
+
+/** Also removes the message from every recipient's notifications. */
+export async function apiAdminDeleteMessage(id: string) {
+  return apiFetch(`/api/admin/messages/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    auth: true,
+  });
+}
+
+/** ADMIN: pending overtime across every site plus recent decisions. */
+export async function apiAdminOvertimeRequests(): Promise<{
+  requests: OvertimeRequestDto[];
+}> {
+  return apiFetch("/api/app/admin/overtime-requests", { auth: true });
+}
+
+export async function apiAdminApproveOvertime(id: string) {
+  return apiFetch(
+    `/api/app/admin/overtime-requests/${encodeURIComponent(id)}/approve`,
+    { method: "POST", body: JSON.stringify({}), auth: true },
+  );
+}
+
+export async function apiAdminRejectOvertime(id: string, note: string) {
+  return apiFetch(
+    `/api/app/admin/overtime-requests/${encodeURIComponent(id)}/reject`,
+    { method: "POST", body: JSON.stringify({ note }), auth: true },
+  );
+}
+
 /**
  * Transfer an employee from one site to another (supervisor/admin only).
  * The employee's scan at the source is removed, and a new scan is created at the destination.

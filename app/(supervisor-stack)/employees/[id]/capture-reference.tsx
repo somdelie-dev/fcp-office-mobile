@@ -168,7 +168,7 @@ function describeEnrollError(code: string, warnings?: string[]): string {
     case "decode_failed":
       return "Couldn't read photo — retake";
     case "duplicate_face":
-      return "Face already enrolled under another worker — contact your admin";
+      return "Face already enrolled under another guy — contact your admin";
     case "low_quality":
       return warnings?.length
         ? `${warnings.map(describeQualityWarning).join(", ")} — retake`

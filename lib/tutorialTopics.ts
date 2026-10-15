@@ -45,7 +45,7 @@ export const TUTORIAL_TOPICS: TutorialTopic[] = [
       "Open the Scan tab and confirm the correct site is selected.",
       "Point the camera at the guy's QR code.",
       "Wait for the beep and green confirmation - the scan is recorded automatically.",
-      "Keep scanning as more workers arrive; the count updates in real time.",
+      "Keep scanning as more guys arrive; the count updates in real time.",
       "Submit the batch when you're done, or let it sync automatically once you're online.",
     ],
   },
@@ -55,9 +55,9 @@ export const TUTORIAL_TOPICS: TutorialTopic[] = [
     title: "How to scan a guy out",
     accent: "#ef4444",
     steps: [
-      "Tap Scan Out Guys on the Home screen when workers are leaving site.",
+      "Tap Scan Out Guys on the Home screen when guys are leaving site.",
       "Confirm the site, then choose Face Scan Out or Photo Scan Out (whichever your site has enabled).",
-      "For Face Scan Out, point the camera at the worker's face and hold still until it's verified.",
+      "For Face Scan Out, point the camera at the guy's face and hold still until it's verified.",
       "For Photo Scan Out, take a clear photo to confirm the exit.",
       "Open the Scan Outs tab anytime to see who left, when, and which method was used.",
     ],
@@ -70,7 +70,7 @@ export const TUTORIAL_TOPICS: TutorialTopic[] = [
     steps: [
       "Open the Team tab to see everyone assigned to your site.",
       "Search by name or personnel code to find a specific guy.",
-      "Check each worker's status: Missing (needs a face profile), Pending (under review), or Recognised (verified and ready).",
+      "Check each guy's status: Missing (needs a face profile), Pending (under review), or Recognised (verified and ready).",
       "Tap + Add New Guy to add someone newly assigned to the site.",
     ],
   },
@@ -80,11 +80,11 @@ export const TUTORIAL_TOPICS: TutorialTopic[] = [
     title: "Setting up face recognition",
     accent: "#0ea5e9",
     steps: [
-      "Open the worker's profile from the Team tab.",
+      "Open the guy's profile from the Team tab.",
       "Check the Reference Photos card - it shows how many of the 5 angles (Front, Left, Right, Smile, Neutral) are captured.",
       "Tap the capture button and follow the on-screen prompt for each pose.",
       "Hold still once a face is detected - the photo captures automatically.",
-      "Once all 5 photos are saved, the worker's status moves from Missing to Pending review, then Recognised once approved.",
+      "Once all 5 photos are saved, the guy's status moves from Missing to Pending review, then Recognised once approved.",
     ],
   },
   {

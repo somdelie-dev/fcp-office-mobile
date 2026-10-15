@@ -22,7 +22,7 @@ export default function FaceRecognation() {
     action?: "in" | "out";
   }>();
 
-  const workerName = name ?? "Worker";
+  const workerName = name ?? "Guy";
   const clockAction: "in" | "out" = action === "out" ? "out" : "in";
 
   const [permission, requestPermission] = useCameraPermissions();

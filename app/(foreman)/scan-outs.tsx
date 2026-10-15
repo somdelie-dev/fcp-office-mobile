@@ -285,7 +285,7 @@ export default function ForemanScanOuts() {
                         style={styles.card}
                         onPress={() => setSelected(p)}
                         accessibilityRole="button"
-                        accessibilityLabel={`Scan-out photo at ${p.siteName}, ${p.workers.length} workers`}
+                        accessibilityLabel={`Scan-out photo at ${p.siteName}, ${p.workers.length} guys`}
                       >
                         <View>
                           {p.photoUrl ? (

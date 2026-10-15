@@ -256,14 +256,13 @@ export function OptionalUpdateModal({
 
 /**
  * Mounted once at the app root. Runs the Android update check after login
- * and renders a blocking modal for required updates or a dismissible one
- * for optional updates. Renders nothing on iOS/web, before login, or when
- * the installed build is current.
+ * and renders a blocking modal only for required updates. Optional updates
+ * never prompt at launch (users found the repeated popup irritating); they
+ * stay available through Settings > Check for updates.
  */
 export function UpdateGate() {
   const { user } = useAuth();
   const [result, setResult] = useState<UpdateCheckResult>({ status: "none" });
-  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     if (!user || Platform.OS !== "android") return;
@@ -279,15 +278,6 @@ export function UpdateGate() {
 
   if (result.status === "required") {
     return <RequiredUpdateModal release={result.release} />;
-  }
-
-  if (result.status === "optional" && !dismissed) {
-    return (
-      <OptionalUpdateModal
-        release={result.release}
-        onDismiss={() => setDismissed(true)}
-      />
-    );
   }
 
   return null;

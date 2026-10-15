@@ -3,10 +3,11 @@ import { GlassCard } from "@/components/GlassCard";
 import { Avatar, OptimizedImage } from "@/components/OptimizedImage";
 import { ZoomableImage } from "@/components/ZoomableImage";
 import { apiEmployeesCached, type ApiEmployee } from "@/lib/apiClient";
-import { apiFetch, getApiBase, getToken } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
+import { downloadEmployeeCard } from "@/lib/employeeCards";
+import { sharePdf } from "@/lib/pdfFiles";
 import { useTheme } from "@/lib/themeContext";
 import * as ImagePicker from "expo-image-picker";
-import * as WebBrowser from "expo-web-browser";
 import { compressImage } from "@/lib/imageCompression";
 import {
   ChevronDown,
@@ -358,17 +359,16 @@ export default function AdminWorkersScreen() {
   }
 
   const handleDownloadCard = useCallback(async (emp: Employee) => {
+    const fullName = `${emp.firstName} ${emp.lastName}`.trim();
     try {
-      const token = await getToken();
-      if (!token) {
-        Alert.alert("Error", "Not authenticated.");
-        return;
-      }
-      const base = getApiBase();
-      const url = `${base}/api/employees/${encodeURIComponent(emp.id)}/card.pdf?token=${encodeURIComponent(token)}`;
-      await WebBrowser.openBrowserAsync(url);
+      const uri = await downloadEmployeeCard({
+        id: emp.id,
+        code: emp.qrCodeValue,
+        fullName,
+      });
+      await sharePdf(uri, `${fullName} card`);
     } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "Failed to open card.");
+      Alert.alert("Error", e?.message ?? "Failed to download card.");
     }
   }, []);
 

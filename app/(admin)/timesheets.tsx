@@ -1,10 +1,9 @@
-import { useFocusEffect } from "expo-router";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FlatList,
   Pressable,
-  ScrollView,
+  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
@@ -12,8 +11,8 @@ import {
 } from "react-native";
 
 import { AuthStyleBackground } from "@/components/AuthStyleBackground";
-import { GlassCard } from "@/components/GlassCard";
 import LoadingOverlay from "@/components/LoadingOverlay";
+import { SearchablePickerModal } from "@/components/SearchablePickerModal";
 import {
   apiAdminListUsers,
   apiAdminTimesheets,
@@ -26,40 +25,61 @@ import { formatCurrency } from "@/lib/formatCurrency";
 import { useTheme } from "@/lib/themeContext";
 import { Ionicons } from "@expo/vector-icons";
 
-// Face Scan green accent, kept as a module constant so the plain (non-hook)
-// StyleSheet entries below can reference it too.
-const NAVY = "#16A34A";
+const ACCENT = "#22c55e";
 
 const themes = {
   dark: {
-    bg: "#0b1220",
-    bgSecondary: "#0f172a",
-    border: "#1f2a44",
-    textPrimary: "white",
+    textPrimary: "#e5e7eb",
     textSecondary: "#94a3b8",
-    textTertiary: "#cbd5e1",
-    accent: "#22c55e",
-    error: "#dc2626",
+    cardBg: "rgba(15,23,42,0.85)",
+    emptyText: "#64748b",
+    rowBorder: "rgba(148,163,184,0.15)",
+    inputBg: "rgba(255,255,255,0.08)",
+    border: "rgba(148,163,184,0.2)",
   },
   light: {
-    bg: "#f8fafc",
-    bgSecondary: "#ffffff",
-    border: "#e2e8f0",
-    textPrimary: "#0f172a",
-    textSecondary: "#64748b",
-    textTertiary: "#475569",
-    accent: "#16A34A",
-    error: "#ef4444",
+    textPrimary: "#111",
+    textSecondary: "#666",
+    cardBg: "rgba(255,255,255,0.9)",
+    emptyText: "#94a3b8",
+    rowBorder: "rgba(0,0,0,0.08)",
+    inputBg: "rgba(0,0,0,0.04)",
+    border: "rgba(0,0,0,0.1)",
   },
 };
 
-function todayLabel() {
-  const d = new Date();
-  return d.toLocaleDateString(undefined, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
+type Colors = (typeof themes)["light"];
+type StatusFilter = "ALL" | TimesheetStatus;
+
+const STATUS_OPTIONS: { id: TimesheetStatus; name: string }[] = [
+  { id: "SUBMITTED", name: "Pending Review" },
+  { id: "APPROVED", name: "Approved" },
+  { id: "PAID", name: "Paid" },
+  { id: "REJECTED", name: "Rejected" },
+  { id: "DRAFT", name: "Draft" },
+];
+
+const AVATAR_PALETTE = [
+  { bg: "#bbf7d0", fg: "#166534" },
+  { bg: "#bfdbfe", fg: "#1e3a8a" },
+  { bg: "#fed7aa", fg: "#9a3412" },
+  { bg: "#ddd6fe", fg: "#5b21b6" },
+  { bg: "#fbcfe8", fg: "#9d174d" },
+  { bg: "#fde68a", fg: "#854d0e" },
+] as const;
+
+function avatarPaletteFor(id: string) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++)
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}
+
+function initialsFor(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function iso10(v: any) {
@@ -73,32 +93,18 @@ function addDaysISO(iso: string, days: number): string {
 }
 
 function formatDateRange(startISO: string, endISO: string): string {
+  const opts: Intl.DateTimeFormatOptions = {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  };
   const start = new Date(`${iso10(startISO)}T00:00:00.000Z`);
   const end = new Date(`${iso10(endISO)}T00:00:00.000Z`);
-  const startStr = start.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-  const endStr = end.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-  return `${startStr} - ${endStr}`;
+  return `${start.toLocaleDateString(undefined, opts)} - ${end.toLocaleDateString(undefined, opts)}`;
 }
 
 function statusLabel(s: TimesheetStatus) {
-  switch (s) {
-    case "SUBMITTED":
-      return "Pending Review";
-    case "APPROVED":
-      return "Approved";
-    case "PAID":
-      return "Paid";
-    case "REJECTED":
-      return "Rejected";
-    default:
-      return "Draft";
-  }
+  return STATUS_OPTIONS.find((o) => o.id === s)?.name ?? "Draft";
 }
 
 function statusColor(s: TimesheetStatus) {
@@ -112,29 +118,40 @@ function statusColor(s: TimesheetStatus) {
     case "REJECTED":
       return "#EA580C";
     default:
-      return "#666";
+      return "#6b7280";
   }
 }
 
+function foremanLabelFor(item: TimesheetListRowDto) {
+  const val = (item.foreman?.name?.trim() || item.foremanName?.trim()) ?? "";
+  const lower = val.toLowerCase();
+  if (!val || lower === "undefined" || lower === "null") return "";
+  return val;
+}
+
+function rowKeyFor(item: TimesheetListRowDto, index: number) {
+  const siteId = item.siteId ?? item.sites?.[0]?.id;
+  return item.rowKey ?? (siteId ? `${item.id}__${siteId}` : `${item.id}_${index}`);
+}
+
 export default function AdminTimesheetsScreen() {
-  const router = useRouter();
   const { theme } = useTheme();
   const colors = themes[theme];
+  const isDark = theme === "dark";
 
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [timesheets, setTimesheets] = useState<TimesheetListRowDto[]>([]);
   const [searchText, setSearchText] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState<"ALL" | TimesheetStatus>(
-    "ALL",
-  );
+  const [selectedStatus, setSelectedStatus] = useState<StatusFilter>("ALL");
+  const [statusPickerOpen, setStatusPickerOpen] = useState(false);
 
   // Period navigation: undefined = let the server resolve "current".
   const [periodOverride, setPeriodOverride] = useState<string | undefined>();
-  const [activePeriod, setActivePeriod] = useState<AdminTimesheetsPeriodDto | null>(
-    null,
-  );
+  const [activePeriod, setActivePeriod] =
+    useState<AdminTimesheetsPeriodDto | null>(null);
 
   const [supervisors, setSupervisors] = useState<AdminUserListItemDto[]>([]);
   const [selectedSupervisorId, setSelectedSupervisorId] = useState<
@@ -148,35 +165,47 @@ export default function AdminTimesheetsScreen() {
       .catch(() => setSupervisors([]));
   }, []);
 
-  // Debounce search
-  React.useEffect(() => {
+  useEffect(() => {
     const id = setTimeout(() => {
       setDebouncedSearch(searchText.trim());
     }, 400);
     return () => clearTimeout(id);
   }, [searchText]);
 
-  const loadTimesheets = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await apiAdminTimesheets({
-        q: debouncedSearch || undefined,
-        status: selectedStatus === "ALL" ? undefined : selectedStatus,
-        period: periodOverride,
-        supervisorId:
-          selectedSupervisorId === "ALL" ? undefined : selectedSupervisorId,
-        limit: 100,
-      });
-      setTimesheets(res.timesheets ?? []);
-      if (res.period) setActivePeriod(res.period);
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to load timesheets");
-      setTimesheets([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [debouncedSearch, selectedStatus, periodOverride, selectedSupervisorId]);
+  const loadTimesheets = useCallback(
+    async (isRefresh = false) => {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+      setError(null);
+      try {
+        const res = await apiAdminTimesheets({
+          q: debouncedSearch || undefined,
+          status: selectedStatus === "ALL" ? undefined : selectedStatus,
+          period: periodOverride,
+          supervisorId:
+            selectedSupervisorId === "ALL" ? undefined : selectedSupervisorId,
+          limit: 100,
+        });
+        setTimesheets(res.timesheets ?? []);
+        if (res.period) setActivePeriod(res.period);
+      } catch (e: any) {
+        setError(e?.message ?? "Failed to load timesheets");
+        setTimesheets([]);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [debouncedSearch, selectedStatus, periodOverride, selectedSupervisorId],
+  );
+
+  // Refetches on focus and whenever a filter changes (the callback identity
+  // changes with its deps), since filtering happens server-side.
+  useFocusEffect(
+    useCallback(() => {
+      loadTimesheets();
+    }, [loadTimesheets]),
+  );
 
   const goToPeriod = useCallback(
     (direction: -1 | 1) => {
@@ -188,183 +217,50 @@ export default function AdminTimesheetsScreen() {
     [activePeriod],
   );
 
-  const goToCurrentPeriod = useCallback(() => {
-    setPeriodOverride(undefined);
-  }, []);
-
-  const selectedSupervisorLabel = useMemo(() => {
-    if (selectedSupervisorId === "ALL") return "All supervisors";
-    return (
-      supervisors.find((s) => s.id === selectedSupervisorId)?.name ??
-      "All supervisors"
-    );
-  }, [selectedSupervisorId, supervisors]);
-
-  React.useEffect(() => {
-    loadTimesheets();
-  }, [loadTimesheets]);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadTimesheets();
-    }, [loadTimesheets]),
+  const supervisorOptions = useMemo(
+    () => supervisors.map((s) => ({ id: s.id, name: s.name })),
+    [supervisors],
   );
 
-  // Local filtering is handled server-side now, just display
-  const filteredTimesheets = timesheets;
+  const selectedSupervisorLabel =
+    selectedSupervisorId === "ALL"
+      ? "All Supervisors"
+      : (supervisors.find((s) => s.id === selectedSupervisorId)?.name ??
+        "All Supervisors");
 
-  const statusOptions = useMemo(
-    (): Array<{ label: string; value: "ALL" | TimesheetStatus }> => [
-      { label: "All", value: "ALL" },
-      { label: "Pending", value: "SUBMITTED" },
-      { label: "Approved", value: "APPROVED" },
-      { label: "Paid", value: "PAID" },
-      { label: "Rejected", value: "REJECTED" },
-      { label: "Draft", value: "DRAFT" },
-    ],
-    [],
-  );
+  const hasFilters =
+    !!searchText.trim() ||
+    selectedStatus !== "ALL" ||
+    selectedSupervisorId !== "ALL";
 
   return (
     <AuthStyleBackground>
-      <ScrollView
-        style={styles.wrap}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <GlassCard style={styles.topCard}>
-          <Text style={[styles.h1, { color: colors.textPrimary }]}>
-            All Timesheets
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>
+            Timesheets
           </Text>
-          <Text style={[styles.sub, { color: colors.textSecondary }]}>
-            {todayLabel()}
-          </Text>
-          <Text style={[styles.adminNote, { color: colors.textTertiary }]}>
-            View and manage timesheets across all foremen and sites
-          </Text>
-        </GlassCard>
+        </View>
 
-        <GlassCard style={styles.filterCard}>
-          {activePeriod && (
-            <View style={styles.periodRow}>
-              <Pressable
-                onPress={() => goToPeriod(-1)}
-                style={[
-                  styles.periodNavBtn,
-                  { backgroundColor: colors.bgSecondary, borderColor: colors.border },
-                ]}
-              >
-                <Ionicons name="chevron-back" size={16} color={colors.textPrimary} />
-              </Pressable>
-
-              <Pressable
-                onPress={goToCurrentPeriod}
-                style={styles.periodLabelWrap}
-              >
-                <Text style={[styles.periodLabel, { color: colors.textPrimary }]}>
-                  {formatDateRange(activePeriod.startISO, activePeriod.endISO)}
-                </Text>
-                {periodOverride && (
-                  <Text style={[styles.periodBackToToday, { color: NAVY }]}>
-                    Jump to current
-                  </Text>
-                )}
-              </Pressable>
-
-              <Pressable
-                onPress={() => goToPeriod(1)}
-                style={[
-                  styles.periodNavBtn,
-                  { backgroundColor: colors.bgSecondary, borderColor: colors.border },
-                ]}
-              >
-                <Ionicons name="chevron-forward" size={16} color={colors.textPrimary} />
-              </Pressable>
-            </View>
-          )}
-
-          <Pressable
-            onPress={() => setSupervisorPickerOpen((v) => !v)}
-            style={[
-              styles.supervisorTrigger,
-              { backgroundColor: colors.bgSecondary, borderColor: colors.border },
-            ]}
-          >
-            <Ionicons name="people-outline" size={16} color={colors.textSecondary} />
-            <Text
-              style={[styles.supervisorTriggerText, { color: colors.textPrimary }]}
-              numberOfLines={1}
-            >
-              {selectedSupervisorLabel}
-            </Text>
-            <Ionicons
-              name={supervisorPickerOpen ? "chevron-up" : "chevron-down"}
-              size={16}
-              color={colors.textSecondary}
-            />
-          </Pressable>
-
-          {supervisorPickerOpen && (
-            <View
-              style={[
-                styles.supervisorDropdown,
-                { backgroundColor: colors.bgSecondary, borderColor: colors.border },
-              ]}
-            >
-              <ScrollView
-                style={{ maxHeight: 240 }}
-                nestedScrollEnabled
-                keyboardShouldPersistTaps="handled"
-              >
-                <Pressable
-                  style={styles.supervisorOption}
-                  onPress={() => {
-                    setSelectedSupervisorId("ALL");
-                    setSupervisorPickerOpen(false);
-                  }}
-                >
-                  <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
-                    All supervisors
-                  </Text>
-                </Pressable>
-                {supervisors.map((s) => (
-                  <Pressable
-                    key={s.id}
-                    style={styles.supervisorOption}
-                    onPress={() => {
-                      setSelectedSupervisorId(s.id);
-                      setSupervisorPickerOpen(false);
-                    }}
-                  >
-                    <Text style={{ color: colors.textPrimary, fontWeight: "700" }}>
-                      {s.name}
-                    </Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-
+        <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
           <View
             style={[
               styles.searchBox,
-              {
-                backgroundColor: colors.bgSecondary,
-                borderColor: colors.border,
-              },
+              { borderColor: colors.rowBorder, backgroundColor: colors.inputBg },
             ]}
           >
             <Ionicons name="search" size={18} color={colors.textSecondary} />
             <TextInput
-              style={[styles.searchInput, { color: colors.textPrimary }]}
-              placeholder="Search foreman or site..."
-              placeholderTextColor={colors.textSecondary}
               value={searchText}
               onChangeText={setSearchText}
+              placeholder="Search foreman or site…"
+              placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+              style={[styles.searchInput, { color: colors.textPrimary }]}
+              autoCapitalize="none"
               returnKeyType="search"
             />
             {searchText.length > 0 && (
-              <Pressable onPress={() => setSearchText("")}>
+              <Pressable onPress={() => setSearchText("")} hitSlop={8}>
                 <Ionicons
                   name="close-circle"
                   size={18}
@@ -373,368 +269,423 @@ export default function AdminTimesheetsScreen() {
               </Pressable>
             )}
           </View>
+        </View>
 
-          <Text style={[styles.filterLabel, { color: colors.textSecondary }]}>
-            Filter by status:
-          </Text>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.statusTabs}
+        <View style={styles.filterBar}>
+          <Pressable
+            style={[
+              styles.filterTrigger,
+              { borderColor: colors.rowBorder, backgroundColor: colors.inputBg },
+            ]}
+            onPress={() => setSupervisorPickerOpen(true)}
           >
-            {statusOptions.map((opt) => (
-              <Pressable
-                key={opt.value}
-                style={[
-                  styles.statusTab,
-                  selectedStatus === opt.value && [
-                    styles.statusTabActive,
-                    { backgroundColor: NAVY },
-                  ],
-                  selectedStatus !== opt.value && {
-                    backgroundColor: colors.bgSecondary,
-                    borderColor: colors.border,
-                  },
-                ]}
-                onPress={() => setSelectedStatus(opt.value)}
-              >
-                <Text
-                  style={[
-                    styles.statusTabLabel,
-                    selectedStatus === opt.value
-                      ? styles.statusTabLabelActive
-                      : { color: colors.textSecondary },
-                  ]}
-                >
-                  {opt.label}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </GlassCard>
-
-        {loading ? (
-          <LoadingOverlay
-            icon="⏳"
-            title="Loading timesheets…"
-            message="Please wait while we fetch all timesheets"
-          />
-        ) : error ? (
-          <View style={styles.stateBox}>
-            <Text
-              style={[styles.stateText, { color: colors.error || "#dc2626" }]}
-            >
-              {error}
-            </Text>
-            <Pressable style={styles.retryButton} onPress={loadTimesheets}>
-              <Ionicons name="refresh" size={18} color="#fff" />
-              <Text style={styles.retryButtonText}>Try Again</Text>
-            </Pressable>
-          </View>
-        ) : filteredTimesheets.length === 0 ? (
-          <View style={styles.stateBox}>
             <Text
               style={[
-                styles.stateText,
-                { color: colors.textSecondary, fontWeight: "800" },
+                styles.filterTriggerText,
+                {
+                  color:
+                    selectedSupervisorId !== "ALL"
+                      ? colors.textPrimary
+                      : colors.textSecondary,
+                },
               ]}
+              numberOfLines={1}
             >
-              No timesheets found.
+              {selectedSupervisorLabel}
             </Text>
+            <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
+          </Pressable>
+          <Pressable
+            style={[
+              styles.filterTrigger,
+              { borderColor: colors.rowBorder, backgroundColor: colors.inputBg },
+            ]}
+            onPress={() => setStatusPickerOpen(true)}
+          >
             <Text
-              style={[styles.stateSubText, { color: colors.textSecondary }]}
+              style={[
+                styles.filterTriggerText,
+                {
+                  color:
+                    selectedStatus !== "ALL"
+                      ? colors.textPrimary
+                      : colors.textSecondary,
+                },
+              ]}
+              numberOfLines={1}
             >
-              {searchText.trim()
-                ? "Try adjusting your search or filters."
-                : "No timesheets match the current filter."}
+              {selectedStatus === "ALL" ? "All Statuses" : statusLabel(selectedStatus)}
+            </Text>
+            <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+
+        <SearchablePickerModal
+          visible={supervisorPickerOpen}
+          title="Filter by Supervisor"
+          searchPlaceholder="Search supervisors…"
+          allLabel="All Supervisors"
+          options={supervisorOptions}
+          selectedId={selectedSupervisorId === "ALL" ? null : selectedSupervisorId}
+          onSelect={(option) => setSelectedSupervisorId(option?.id ?? "ALL")}
+          onClose={() => setSupervisorPickerOpen(false)}
+          colors={colors}
+          isDark={isDark}
+        />
+        <SearchablePickerModal
+          visible={statusPickerOpen}
+          title="Filter by Status"
+          searchPlaceholder="Search statuses…"
+          allLabel="All Statuses"
+          options={STATUS_OPTIONS}
+          selectedId={selectedStatus === "ALL" ? null : selectedStatus}
+          onSelect={(option) =>
+            setSelectedStatus((option?.id as TimesheetStatus | undefined) ?? "ALL")
+          }
+          onClose={() => setStatusPickerOpen(false)}
+          colors={colors}
+          isDark={isDark}
+        />
+
+        <View style={styles.periodRow}>
+          <View style={styles.periodNav}>
+            <Pressable
+              onPress={() => goToPeriod(-1)}
+              disabled={!activePeriod}
+              hitSlop={8}
+              style={[styles.periodNavBtn, { borderColor: colors.rowBorder }]}
+            >
+              <Ionicons name="chevron-back" size={16} color={colors.textPrimary} />
+            </Pressable>
+            <Pressable
+              onPress={() => setPeriodOverride(undefined)}
+              disabled={!periodOverride}
+            >
+              <Text style={[styles.periodHeading, { color: colors.textPrimary }]}>
+                {activePeriod
+                  ? formatDateRange(activePeriod.startISO, activePeriod.endISO)
+                  : "Current period"}
+              </Text>
+              {periodOverride ? (
+                <Text style={styles.jumpToCurrent}>Jump to current</Text>
+              ) : null}
+            </Pressable>
+            <Pressable
+              onPress={() => goToPeriod(1)}
+              disabled={!activePeriod}
+              hitSlop={8}
+              style={[styles.periodNavBtn, { borderColor: colors.rowBorder }]}
+            >
+              <Ionicons name="chevron-forward" size={16} color={colors.textPrimary} />
+            </Pressable>
+          </View>
+          <Text style={[styles.periodCount, { color: colors.textSecondary }]}>
+            {timesheets.length} timesheet{timesheets.length === 1 ? "" : "s"}
+          </Text>
+        </View>
+
+        {loading && !refreshing ? (
+          <LoadingOverlay title="Loading timesheets…" message="Please wait" />
+        ) : error ? (
+          <View style={styles.stateWrap}>
+            <Ionicons name="alert-circle" size={48} color="#ef4444" />
+            <Text style={[styles.errorText, { color: colors.textPrimary }]}>
+              {error}
+            </Text>
+            <Pressable onPress={() => loadTimesheets()} style={styles.retryBtn}>
+              <Text style={styles.retryText}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : timesheets.length === 0 ? (
+          <View style={styles.stateWrap}>
+            <Ionicons
+              name="document-text-outline"
+              size={64}
+              color={colors.emptyText}
+            />
+            <Text style={[styles.emptyText, { color: colors.emptyText }]}>
+              {hasFilters
+                ? "No timesheets match your filters"
+                : "No timesheets for this period"}
             </Text>
           </View>
         ) : (
-          <GlassCard style={styles.listCard}>
-            <View style={styles.listHeader}>
-              <Text style={[styles.listTitle, { color: colors.textPrimary }]}>
-                Timesheets
-              </Text>
-              <Text style={[styles.listMeta, { color: colors.textSecondary }]}>
-                {filteredTimesheets.length} result
-                {filteredTimesheets.length === 1 ? "" : "s"}
-              </Text>
-            </View>
-            <FlatList
-              data={filteredTimesheets}
-              keyExtractor={(item, index) => {
-                const firstSite = Array.isArray(item.sites)
-                  ? item.sites[0]
-                  : undefined;
-                const siteId = item.siteId ?? firstSite?.id;
-                return (
-                  item.rowKey ??
-                  (siteId ? `${item.id}__${siteId}` : `${item.id}_${index}`)
-                );
-              }}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <TimesheetRow item={item} theme={colors} />
-              )}
-            />
-          </GlassCard>
+          <FlatList
+            data={timesheets}
+            keyExtractor={rowKeyFor}
+            renderItem={({ item }) => <TimesheetCard item={item} colors={colors} />}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => loadTimesheets(true)}
+              />
+            }
+          />
         )}
-
-        <View style={{ height: 20 }} />
-      </ScrollView>
+      </View>
     </AuthStyleBackground>
   );
 }
 
-function TimesheetRow({
+function TimesheetCard({
   item,
-  theme,
+  colors,
 }: {
   item: TimesheetListRowDto;
-  theme: (typeof themes)["dark"];
+  colors: Colors;
 }) {
   const router = useRouter();
-  const sColor = statusColor(item.status ?? "DRAFT");
-  const firstSite = Array.isArray(item.sites) ? item.sites[0] : undefined;
+  const status = item.status ?? "DRAFT";
+  const sColor = statusColor(status);
+  const firstSite = item.sites?.[0];
+  const siteId = item.siteId ?? firstSite?.id;
   const siteCode = item.siteCode ?? firstSite?.code ?? "";
   const siteName = item.siteName ?? firstSite?.name ?? "";
-  const siteLine = [siteCode, siteName].filter(Boolean).join(" • ");
-  const foremanLabel = (() => {
-    const primary =
-      item.foreman?.name && item.foreman?.name.trim().length > 0
-        ? item.foreman.name.trim()
-        : item.foremanName?.trim();
-
-    const val = primary ?? "";
-    const lower = val.toLowerCase();
-    if (!val || lower === "undefined" || lower === "null") return "";
-    return val;
-  })();
-
-  const hasTotals =
-    item.totalWorkerDays != null || item.totalWorkerWages != null;
-  const daysLabel =
-    item.totalWorkerDays != null ? `${item.totalWorkerDays} days` : undefined;
-  const wagesLabel =
-    item.totalWorkerWages != null
-      ? formatCurrency(item.totalWorkerWages)
-      : undefined;
+  const siteLine = [siteCode, siteName].filter(Boolean).join(" - ");
+  const foreman = foremanLabelFor(item);
+  const avatar = avatarPaletteFor(item.foremanId ?? item.foreman?.id ?? item.id);
 
   return (
     <Pressable
-      onPress={() => {
+      onPress={() =>
         router.push({
           pathname: "/(admin-stack)/timesheets/[id]",
-          params: {
-            id: item.id,
-            siteId: item.siteId ?? firstSite?.id,
-          },
-        });
-      }}
+          params: { id: item.id, siteId },
+        })
+      }
       style={({ pressed }) => [
-        styles.row,
+        styles.card,
         {
-          borderBottomColor: theme.border || "#1f2a44",
-          opacity: pressed ? 0.7 : 1,
+          borderColor: colors.rowBorder,
+          backgroundColor: colors.cardBg,
+          opacity: pressed ? 0.8 : 1,
         },
       ]}
     >
-      <View style={styles.rowLeft}>
-        <Text style={[styles.rowTopText, { color: theme.textPrimary }]}>
-          {formatDateRange(item.startISO, item.endISO)}
-        </Text>
+      <View style={styles.cardTopRow}>
+        <View style={styles.cardLeft}>
+          <View style={styles.identityRow}>
+            <View style={[styles.avatar, { backgroundColor: avatar.bg }]}>
+              <Text style={[styles.avatarText, { color: avatar.fg }]}>
+                {initialsFor(foreman || siteName)}
+              </Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                style={[styles.foremanName, { color: colors.textPrimary }]}
+                numberOfLines={1}
+              >
+                {foreman || "Unassigned foreman"}
+              </Text>
+              <Text style={[styles.foremanRole, { color: colors.textSecondary }]}>
+                Site Foreman
+              </Text>
+            </View>
+          </View>
 
-        <Text
-          style={[styles.rowMidText, { color: theme.textSecondary }]}
-          numberOfLines={1}
-        >
-          {foremanLabel}
-        </Text>
+          {siteLine ? (
+            <View style={styles.siteRow}>
+              <Ionicons name="business" size={14} color={colors.textSecondary} />
+              <Text
+                style={[styles.siteText, { color: colors.textPrimary }]}
+                numberOfLines={1}
+              >
+                {siteLine}
+              </Text>
+            </View>
+          ) : null}
+        </View>
 
-        <Text
-          style={[styles.rowBottomText, { color: theme.textSecondary }]}
-          numberOfLines={1}
-        >
-          {siteLine}
-        </Text>
+        <View style={styles.cardRight}>
+          <View style={[styles.statusBadge, { backgroundColor: `${sColor}1f` }]}>
+            <View style={[styles.statusDot, { backgroundColor: sColor }]} />
+            <Text style={[styles.statusText, { color: sColor }]}>
+              {statusLabel(status)}
+            </Text>
+          </View>
+          {item.totalWorkerWages != null && (
+            <Text style={[styles.wages, { color: colors.textPrimary }]}>
+              {formatCurrency(item.totalWorkerWages)}
+            </Text>
+          )}
+          {item.totalWorkerDays != null && (
+            <Text style={[styles.days, { color: colors.textSecondary }]}>
+              {item.totalWorkerDays} guy day
+              {item.totalWorkerDays === 1 ? "" : "s"}
+            </Text>
+          )}
+        </View>
       </View>
 
-      <View style={styles.rowRight}>
-        {hasTotals && (
-          <View style={styles.rowStats}>
-            {daysLabel && (
-              <Text
-                style={[styles.rowStatsTop, { color: theme.textPrimary }]}
-                numberOfLines={1}
-              >
-                {daysLabel}
-              </Text>
-            )}
-            {wagesLabel && (
-              <Text
-                style={[styles.rowStatsBottom, { color: theme.textSecondary }]}
-                numberOfLines={1}
-              >
-                {wagesLabel}
-              </Text>
-            )}
-          </View>
-        )}
-        <View style={[styles.badge, { backgroundColor: `${sColor}18` }]}>
-          <View style={[styles.dot, { backgroundColor: sColor }]} />
-          <Text style={[styles.badgeText, { color: sColor }]}>
-            {statusLabel(item.status ?? "DRAFT")}
+      <View style={[styles.cardFooter, { borderTopColor: colors.rowBorder }]}>
+        <View style={styles.footerLeft}>
+          <Ionicons name="calendar-outline" size={12} color={colors.textSecondary} />
+          <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+            {formatDateRange(item.startISO, item.endISO)}
           </Text>
+          {item.isCurrent && (
+            <View style={styles.currentBadge}>
+              <Text style={styles.currentText}>Current</Text>
+            </View>
+          )}
         </View>
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color={theme.textSecondary}
-        />
+        <View style={styles.footerRight}>
+          <Text style={styles.viewText}>View</Text>
+          <Ionicons name="chevron-forward" size={14} color={ACCENT} />
+        </View>
       </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, paddingHorizontal: 16, paddingTop: 0 },
-
-  topCard: { padding: 14, marginBottom: 12 },
-  filterCard: { padding: 14, marginBottom: 12 },
-  listCard: { padding: 0 },
-
-  h1: { fontSize: 20, fontWeight: "900" },
-  sub: { marginTop: 6, fontWeight: "800", fontSize: 13 },
-  adminNote: { marginTop: 4, fontWeight: "700", fontSize: 12 },
-
-  periodRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-    gap: 8,
-  },
-  periodNavBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  periodLabelWrap: { flex: 1, alignItems: "center" },
-  periodLabel: { fontSize: 14, fontWeight: "900" },
-  periodBackToToday: { fontSize: 11, fontWeight: "800", marginTop: 2 },
-
-  supervisorTrigger: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  supervisorTriggerText: { flex: 1, fontSize: 13, fontWeight: "700" },
-  supervisorDropdown: {
-    borderRadius: 10,
-    borderWidth: 1,
-    marginBottom: 12,
-    overflow: "hidden",
-  },
-  supervisorOption: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(148,163,184,0.15)",
-  },
+  container: { flex: 1 },
+  header: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  title: { fontSize: 18, fontWeight: "900" },
 
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
+    height: 42,
+    borderRadius: 5,
     borderWidth: 1,
-    marginBottom: 14,
     gap: 8,
   },
-  searchInput: { flex: 1, fontSize: 14, fontWeight: "600" },
+  searchInput: { flex: 1, fontSize: 14 },
 
-  filterLabel: { fontSize: 12, fontWeight: "900", marginBottom: 8 },
-  statusTabs: { flexDirection: "row", gap: 8 },
-  statusTab: {
+  filterBar: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  filterTrigger: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
+    height: 40,
+    borderRadius: 5,
     borderWidth: 1,
-    marginRight: 8,
   },
-  statusTabActive: { backgroundColor: NAVY, borderColor: NAVY },
-  statusTabLabel: { fontSize: 12, fontWeight: "900" },
-  statusTabLabelActive: { color: "#fff" },
+  filterTriggerText: { flex: 1, fontSize: 13, fontWeight: "700" },
 
-  listHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.06)",
-  },
-  listTitle: { fontSize: 14, fontWeight: "900" },
-  listMeta: { fontSize: 12, fontWeight: "800" },
-
-  row: {
-    paddingVertical: 14,
-    paddingHorizontal: 14,
+  periodRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottomWidth: 1,
+    paddingHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 10,
   },
-
-  rowLeft: { flex: 1, gap: 4, paddingRight: 12 },
-  rowTopText: { fontSize: 14, fontWeight: "900" },
-  rowMidText: { fontSize: 13, fontWeight: "800" },
-  rowBottomText: { fontSize: 12, fontWeight: "700" },
-
-  rowRight: { flexDirection: "row", alignItems: "center", gap: 10 },
-
-  rowStats: {
-    alignItems: "flex-end",
-    marginRight: 4,
+  periodNav: { flexDirection: "row", alignItems: "center", gap: 10 },
+  periodNavBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 5,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  rowStatsTop: { fontSize: 12, fontWeight: "800" },
-  rowStatsBottom: { fontSize: 11, fontWeight: "700" },
+  periodHeading: { fontSize: 17, fontWeight: "900" },
+  jumpToCurrent: { fontSize: 11, fontWeight: "800", color: ACCENT },
+  periodCount: { fontSize: 13, fontWeight: "700" },
 
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+  listContent: { paddingHorizontal: 16, paddingBottom: 32 },
+
+  card: {
+    padding: 14,
+    borderWidth: 1,
+    borderRadius: 5,
+    marginBottom: 12,
+  },
+  cardTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  cardLeft: { flex: 1, minWidth: 0, gap: 6 },
+  identityRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: { fontSize: 14, fontWeight: "900" },
+  foremanName: { fontSize: 15, fontWeight: "800" },
+  foremanRole: { fontSize: 11, fontWeight: "600", marginTop: 1 },
+  siteRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+    marginTop: 2,
   },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  badgeText: { fontSize: 12, fontWeight: "900" },
+  siteText: { flex: 1, fontSize: 13, fontWeight: "800" },
 
-  stateBox: { paddingVertical: 28, alignItems: "center", gap: 8 },
-  stateText: { fontWeight: "800", fontSize: 14 },
-  stateSubText: { fontWeight: "700", fontSize: 12 },
-
-  retryButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: "#dc2626",
-    borderRadius: 8,
+  cardRight: { alignItems: "flex-end", gap: 4, flexShrink: 0 },
+  statusBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 5,
+    gap: 5,
   },
-  retryButtonText: { fontSize: 13, fontWeight: "900", color: "#fff" },
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
+  statusText: { fontSize: 11, fontWeight: "800" },
+  wages: { fontSize: 15, fontWeight: "800", marginTop: 2 },
+  days: { fontSize: 11, fontWeight: "600" },
+
+  cardFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    gap: 8,
+  },
+  footerLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    minWidth: 0,
+  },
+  footerText: { fontSize: 12, fontWeight: "700" },
+  currentBadge: {
+    backgroundColor: ACCENT,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
+    marginLeft: 4,
+  },
+  currentText: { color: "#fff", fontSize: 10, fontWeight: "800" },
+  footerRight: { flexDirection: "row", alignItems: "center", gap: 2 },
+  viewText: { fontSize: 12, fontWeight: "800", color: ACCENT },
+
+  stateWrap: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 32,
+  },
+  errorText: { fontSize: 16, textAlign: "center", marginTop: 12 },
+  emptyText: { fontSize: 16, textAlign: "center", marginTop: 16 },
+  retryBtn: {
+    marginTop: 16,
+    backgroundColor: ACCENT,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 5,
+  },
+  retryText: { color: "#fff", fontWeight: "600" },
 });

@@ -843,7 +843,7 @@ export default function SiteDayPhotoScreen() {
       setOvertimePicker({ workers, selected: new Set() });
     } catch (e: any) {
       Alert.alert(
-        "Couldn't load workers",
+        "Couldn't load guys",
         e?.message ?? "Please check your connection and try again.",
       );
     }
@@ -860,7 +860,7 @@ export default function SiteDayPhotoScreen() {
     }
     Alert.alert(
       "Is this overtime?",
-      "Choose Yes to pick the workers who worked overtime. The others stay scanned in.",
+      "Choose Yes to pick the guys who worked overtime. The others stay scanned in.",
       [
         { text: "Cancel", style: "cancel" },
         { text: "No, normal time", onPress: () => submitPendingPhoto(null) },
@@ -1485,7 +1485,7 @@ export default function SiteDayPhotoScreen() {
               Who worked overtime?
             </Text>
             <Text style={[typography.body, { color: colors.textSecondary }]}>
-              Only the workers you select are scanned out now. The rest stay
+              Only the guys you select are scanned out now. The rest stay
               scanned in.
             </Text>
             <ScrollView style={styles.sheetList}>

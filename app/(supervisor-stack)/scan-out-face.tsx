@@ -270,7 +270,7 @@ export default function SupervisorScanOutFaceScanner() {
         const existing = next.get(id);
         next.set(id, {
           id,
-          fullName: String(employee?.fullName ?? existing?.fullName ?? "Worker"),
+          fullName: String(employee?.fullName ?? existing?.fullName ?? "Guy"),
           faceImageUrl: existing?.faceImageUrl ?? null,
           status,
           confidence,
@@ -903,7 +903,7 @@ export default function SupervisorScanOutFaceScanner() {
                   setManuallyPaused(true);
                   setResult(null);
                   setPausedMessage(
-                    "Paused — tap Resume when the next worker is ready.",
+                    "Paused — tap Resume when the next guy is ready.",
                   );
                   setPhaseTracked("paused");
                 }
@@ -974,7 +974,7 @@ function ScannerClosedCard({ onStart }: { onStart: () => void }) {
         <Text
           style={[typography.caption, { textAlign: "center", maxWidth: 290 }]}
         >
-          Start the scanner when a team is ready to clock out. Workers simply
+          Start the scanner when a team is ready to clock out. Guys simply
           walk up and look at the camera — their site and foreman are
           detected automatically.
         </Text>
@@ -1025,7 +1025,7 @@ function AllDoneCard({
         <Text
           style={[typography.caption, { textAlign: "center", maxWidth: 290 }]}
         >
-          {clockedOutToday} of {totalToday} worker
+          {clockedOutToday} of {totalToday} guy
           {totalToday === 1 ? "" : "s"} scanned in today across your sites
           have been clocked out. Nothing left for the scanner to do.
         </Text>
@@ -1289,7 +1289,7 @@ function ResultCard({
             Couldn't verify this face
           </Text>
           <Text style={[typography.caption, { textAlign: "center" }]}>
-            Make sure the worker is facing the camera and try again.
+            Make sure the guy is facing the camera and try again.
           </Text>
           <Pressable
             onPress={onTryAgain}
@@ -1398,7 +1398,7 @@ function ResultCard({
           >
             {phase === "needsConfirm"
               ? "Lower-confidence match — scanner continuing"
-              : "Ready for next worker…"}
+              : "Ready for next guy…"}
           </Text>
           <View
             style={[
@@ -1451,7 +1451,7 @@ function EndSessionModal({
                 End Clock Out Session?
               </Text>
               <Text style={[typography.caption, { textAlign: "center" }]}>
-                You have clocked out {clockedOutToday} worker
+                You have clocked out {clockedOutToday} guy
                 {clockedOutToday === 1 ? "" : "s"} today.
               </Text>
 

@@ -164,7 +164,7 @@ function normalizeTeamMember(raw: any): TeamRow | null {
   if (!id) return null;
   return {
     id: String(id),
-    fullName: String(employee?.fullName ?? employee?.name ?? "Worker"),
+    fullName: String(employee?.fullName ?? employee?.name ?? "Guy"),
     role: String(
       employee?.role ??
         employee?.jobTitle ??
@@ -323,7 +323,7 @@ export default function ScanOutFaceScanner() {
         next.set(id, {
           id,
           fullName: String(
-            employee?.fullName ?? existing?.fullName ?? "Worker",
+            employee?.fullName ?? existing?.fullName ?? "Guy",
           ),
           role: String(
             employee?.role ??
@@ -1020,7 +1020,7 @@ export default function ScanOutFaceScanner() {
                   setManuallyPaused(true);
                   setResult(null);
                   setPausedMessage(
-                    "Paused — tap Resume when the next worker is ready.",
+                    "Paused — tap Resume when the next guy is ready.",
                   );
                   setPhaseTracked("paused");
                 }
@@ -1144,7 +1144,7 @@ function AllDoneCard({
         <Text
           style={[typography.caption, { textAlign: "center", maxWidth: 290 }]}
         >
-          {clockedOutToday} of {totalToday} worker
+          {clockedOutToday} of {totalToday} guy
           {totalToday === 1 ? "" : "s"} scanned in today have been clocked out.
           Nothing left for the scanner to do.
         </Text>
@@ -1405,7 +1405,7 @@ function ResultCard({
             Couldn't verify this face
           </Text>
           <Text style={[typography.caption, { textAlign: "center" }]}>
-            Make sure the worker is facing the camera and try again.
+            Make sure the guy is facing the camera and try again.
           </Text>
           <Pressable
             onPress={onTryAgain}
@@ -1506,7 +1506,7 @@ function ResultCard({
           >
             {phase === "needsConfirm"
               ? "Lower-confidence match — scanner continuing"
-              : "Ready for next worker…"}
+              : "Ready for next guy…"}
           </Text>
           <View
             style={[
@@ -1559,7 +1559,7 @@ function EndSessionModal({
                 End Clock Out Session?
               </Text>
               <Text style={[typography.caption, { textAlign: "center" }]}>
-                You have clocked out {clockedOutToday} worker
+                You have clocked out {clockedOutToday} guy
                 {clockedOutToday === 1 ? "" : "s"} today.
               </Text>
 

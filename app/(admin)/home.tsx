@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import {
   BarChart3,
   Building2,
@@ -11,6 +11,10 @@ import {
   QrCode,
   LogOut,
   ArrowLeftRight,
+  Printer,
+  Calculator,
+  MessageSquare,
+  Timer,
   ScanFace,
   Shield,
   UserCheck,
@@ -34,6 +38,7 @@ import { GlassCard } from "@/components/GlassCard";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import {
   apiAdminDashboardMetricsCached,
+  apiAdminOvertimeRequests,
   apiAdminTopSiteWages,
   apiAdminWageComparison,
   apiAdminWeeklyAttendanceCached,
@@ -100,6 +105,7 @@ export default function AdminHomeScreen() {
   });
 
   const [topSiteWages, setTopSiteWages] = useState<TopSiteWageDto[]>([]);
+  const [pendingOvertime, setPendingOvertime] = useState(0);
 
   const [wageComparison, setWageComparison] = useState<{
     fortnight: WageComparisonPeriod;
@@ -176,6 +182,20 @@ export default function AdminHomeScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Refetched on focus so the badge drops after approving on the Overtime screen.
+  useFocusEffect(
+    useCallback(() => {
+      apiAdminOvertimeRequests()
+        .then((res) =>
+          setPendingOvertime(
+            (res.requests ?? []).filter((r) => r.status === "PENDING").length,
+          ),
+        )
+        // The badge is a convenience; the Overtime screen shows real errors.
+        .catch(() => setPendingOvertime(0));
+    }, []),
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -337,6 +357,86 @@ export default function AdminHomeScreen() {
                 {
                   backgroundColor: pressed
                     ? isDark
+                      ? "rgba(234,179,8,0.25)"
+                      : "rgba(234,179,8,0.12)"
+                    : isDark
+                      ? "rgba(234,179,8,0.15)"
+                      : "rgba(234,179,8,0.08)",
+                },
+              ]}
+              onPress={() =>
+                router.push("/(admin-stack)/overtime-entries" as any)
+              }
+            >
+              <View
+                style={[
+                  styles.quickActionIcon,
+                  { backgroundColor: "rgba(234,179,8,0.2)" },
+                ]}
+              >
+                <Timer size={20} color="#eab308" strokeWidth={2.2} />
+              </View>
+              <View style={styles.quickActionText}>
+                <Text style={[styles.quickActionTitle, { color: textMain }]}>
+                  Overtime
+                </Text>
+                <Text style={[styles.quickActionSub, { color: textSub }]}>
+                  Approve, add &amp; mark paid
+                </Text>
+              </View>
+              {pendingOvertime > 0 && (
+                <View style={styles.countBadge}>
+                  <Text style={styles.countBadgeText}>
+                    {pendingOvertime > 99 ? "99+" : pendingOvertime}
+                  </Text>
+                </View>
+              )}
+              <ChevronRight size={18} color={textSub} />
+            </Pressable>
+
+            {/* The messages API is admin-only, so office users don't see it. */}
+            {user?.role === "ADMIN" && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.quickActionBtn,
+                  {
+                    backgroundColor: pressed
+                      ? isDark
+                        ? "rgba(59,130,246,0.25)"
+                        : "rgba(59,130,246,0.12)"
+                      : isDark
+                        ? "rgba(59,130,246,0.15)"
+                        : "rgba(59,130,246,0.08)",
+                  },
+                ]}
+                onPress={() => router.push("/(admin-stack)/messages" as any)}
+              >
+                <View
+                  style={[
+                    styles.quickActionIcon,
+                    { backgroundColor: "rgba(59,130,246,0.2)" },
+                  ]}
+                >
+                  <MessageSquare size={20} color="#3b82f6" strokeWidth={2.2} />
+                </View>
+                <View style={styles.quickActionText}>
+                  <Text style={[styles.quickActionTitle, { color: textMain }]}>
+                    Messages
+                  </Text>
+                  <Text style={[styles.quickActionSub, { color: textSub }]}>
+                    Notify foremen &amp; supervisors
+                  </Text>
+                </View>
+                <ChevronRight size={18} color={textSub} />
+              </Pressable>
+            )}
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.quickActionBtn,
+                {
+                  backgroundColor: pressed
+                    ? isDark
                       ? "rgba(16,185,129,0.25)"
                       : "rgba(16,185,129,0.12)"
                     : isDark
@@ -398,6 +498,40 @@ export default function AdminHomeScreen() {
                 </Text>
                 <Text style={[styles.quickActionSub, { color: textSub }]}>
                   Search &amp; filter scan-outs
+                </Text>
+              </View>
+              <ChevronRight size={18} color={textSub} />
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.quickActionBtn,
+                {
+                  backgroundColor: pressed
+                    ? isDark
+                      ? "rgba(14,165,233,0.25)"
+                      : "rgba(14,165,233,0.12)"
+                    : isDark
+                      ? "rgba(14,165,233,0.15)"
+                      : "rgba(14,165,233,0.08)",
+                },
+              ]}
+              onPress={() => router.push("/(admin-stack)/print-cards" as any)}
+            >
+              <View
+                style={[
+                  styles.quickActionIcon,
+                  { backgroundColor: "rgba(14,165,233,0.2)" },
+                ]}
+              >
+                <Printer size={20} color="#0ea5e9" strokeWidth={2.2} />
+              </View>
+              <View style={styles.quickActionText}>
+                <Text style={[styles.quickActionTitle, { color: textMain }]}>
+                  Quick Print Cards
+                </Text>
+                <Text style={[styles.quickActionSub, { color: textSub }]}>
+                  Download &amp; print people cards
                 </Text>
               </View>
               <ChevronRight size={18} color={textSub} />
@@ -590,7 +724,7 @@ export default function AdminHomeScreen() {
                       : "rgba(16,185,129,0.08)",
                 },
               ]}
-              onPress={() => router.push("/(admin-stack)/materials" as any)}
+              onPress={() => router.push("/(admin-stack)/paints" as any)}
             >
               <View
                 style={[
@@ -602,10 +736,44 @@ export default function AdminHomeScreen() {
               </View>
               <View style={styles.quickActionText}>
                 <Text style={[styles.quickActionTitle, { color: textMain }]}>
-                  Materials
+                  Paints &amp; Preparations
                 </Text>
                 <Text style={[styles.quickActionSub, { color: textSub }]}>
-                  Orders &amp; procurement
+                  Catalogue, prices &amp; coverage
+                </Text>
+              </View>
+              <ChevronRight size={18} color={textSub} />
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.quickActionBtn,
+                {
+                  backgroundColor: pressed
+                    ? isDark
+                      ? "rgba(20,184,166,0.25)"
+                      : "rgba(20,184,166,0.12)"
+                    : isDark
+                      ? "rgba(20,184,166,0.15)"
+                      : "rgba(20,184,166,0.08)",
+                },
+              ]}
+              onPress={() => router.push("/(foreman-stack)/calculator" as any)}
+            >
+              <View
+                style={[
+                  styles.quickActionIcon,
+                  { backgroundColor: "rgba(20,184,166,0.2)" },
+                ]}
+              >
+                <Calculator size={20} color="#14b8a6" strokeWidth={2.2} />
+              </View>
+              <View style={styles.quickActionText}>
+                <Text style={[styles.quickActionTitle, { color: textMain }]}>
+                  Calculator
+                </Text>
+                <Text style={[styles.quickActionSub, { color: textSub }]}>
+                  Paint quantities &amp; quick sums
                 </Text>
               </View>
               <ChevronRight size={18} color={textSub} />
@@ -1134,6 +1302,21 @@ const styles = StyleSheet.create({
   quickActionSub: {
     fontSize: 12,
     fontWeight: "500",
+  },
+
+  countBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    backgroundColor: "#ef4444",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  countBadgeText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "800",
   },
 
   statCard: {
