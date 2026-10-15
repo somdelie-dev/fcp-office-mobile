@@ -64,7 +64,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow FirstClass to use your camera to scan worker QR codes and capture profile photos.",
+          "cameraPermission": "Allow FirstClass to use your camera to scan guys' QR codes and capture profile photos.",
           "microphonePermission": "Allow FirstClass to use your microphone for QR scan audio feedback.",
           "recordAudioAndroid": false
         }
@@ -72,14 +72,14 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow FirstClass to access your photos to upload worker profile pictures.",
-          "cameraPermission": "Allow FirstClass to use your camera to capture worker profile photos."
+          "photosPermission": "Allow FirstClass to access your photos to upload guys' profile pictures.",
+          "cameraPermission": "Allow FirstClass to use your camera to capture guys' profile photos."
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow FirstClass to use your location when scanning workers on site."
+          "locationWhenInUsePermission": "Allow FirstClass to use your location when scanning guys on site."
         }
       ],
       [
